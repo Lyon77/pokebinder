@@ -8,14 +8,15 @@ import { renderListView, updateListCaughtState } from './render.js';
 import { renderBinderView, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews } from './binder.js';
 import { computeStats, renderStats } from './stats.js';
 import {
-  loadState, saveState, loadStateFromData,
+  loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
   toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   saveBooks, exportState, importState, resetCaught,
 } from './storage.js';
 import {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
-  setStatusCallback, loadFromGist,
+  setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
+  loadFromGist, startPolling, stopPolling,
 } from './sync.js';
 import { fetchCardsForPokemon } from './tcg-api.js';
 
@@ -1130,6 +1131,18 @@ function showSyncIndicator(status, message) {
 }
 
 setStatusCallback(showSyncIndicator);
+setRemoteChangeCallback((data) => {
+  if (data && Array.isArray(data.caught)) {
+    const remote = loadStateFromData(data);
+    if (remote) {
+      state = remote;
+      saveStateLocal(state);
+      binderLayoutSelect.value = state.binderLayout;
+      binderFlowCheck.checked = state.binderFlow === 'row';
+      rebuildCollection();
+    }
+  }
+});
 
 syncBtn.addEventListener('click', () => {
   const config = getSyncConfig();
@@ -1168,16 +1181,19 @@ syncSaveBtn.addEventListener('click', async () => {
     syncStatusBox.textContent = 'Connected and synced!';
     syncStatusBox.className = 'sync-status-box connected';
     updateSyncButton();
+    startPolling(10000);
   } catch (err) {
     syncStatusBox.textContent = 'Error: ' + err.message;
     syncStatusBox.className = 'sync-status-box error';
     clearSyncConfig();
     updateSyncButton();
+    stopPolling();
   }
 });
 
 syncDisconnectBtn.addEventListener('click', () => {
   clearSyncConfig();
+  stopPolling();
   syncStatusBox.textContent = 'Disconnected. Data remains in this browser.';
   syncStatusBox.className = 'sync-status-box';
   updateSyncButton();
@@ -1199,6 +1215,8 @@ async function init() {
           saveState(state);
         }
       }
+      setLastSavedJson(JSON.stringify(serializeState(state)));
+      startPolling(10000);
     } catch {
       // Fall back to local state silently
     }

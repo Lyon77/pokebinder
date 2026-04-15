@@ -2,6 +2,7 @@ import { scheduleSave, isSyncConfigured } from './sync.js';
 
 const STORAGE_KEY = 'pokedex-tracker';
 const CURRENT_VERSION = 2;
+let skipSync = false;
 
 const DEFAULT_BOOKS = [
   { generations: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
@@ -59,9 +60,15 @@ function serializeState(state) {
 function saveState(state) {
   const serializable = serializeState(state);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
-  if (isSyncConfigured()) {
+  if (isSyncConfigured() && !skipSync) {
     scheduleSave(serializable);
   }
+}
+
+function saveStateLocal(state) {
+  skipSync = true;
+  saveState(state);
+  skipSync = false;
 }
 
 function toggleCaught(state, formId) {
@@ -206,7 +213,7 @@ function loadStateFromData(data) {
 }
 
 export {
-  loadState, saveState, serializeState, loadStateFromData,
+  loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
   toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   saveBooks, addBook, updateBook, removeBook,

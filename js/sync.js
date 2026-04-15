@@ -4,7 +4,10 @@ const SYNC_GIST_KEY = 'pokebinder-sync-gist-id';
 let syncPat = localStorage.getItem(SYNC_PAT_KEY) || '';
 let syncGistId = localStorage.getItem(SYNC_GIST_KEY) || '';
 let saveTimer = null;
+let pollTimer = null;
+let lastSavedJson = null;
 let onSyncStatus = null;
+let onRemoteChange = null;
 
 function isSyncConfigured() {
   return !!(syncPat && syncGistId);
@@ -30,6 +33,10 @@ function clearSyncConfig() {
 
 function setStatusCallback(cb) {
   onSyncStatus = cb;
+}
+
+function setRemoteChangeCallback(cb) {
+  onRemoteChange = cb;
 }
 
 function emitStatus(status, message) {
@@ -96,6 +103,7 @@ async function saveToGist(stateData) {
     if (!res.ok) {
       throw new Error(`GitHub API error: ${res.status}`);
     }
+    lastSavedJson = JSON.stringify(stateData);
     emitStatus('synced', 'Synced');
   } catch (err) {
     emitStatus('error', 'Save failed');
@@ -109,7 +117,50 @@ function scheduleSave(stateData) {
   saveTimer = setTimeout(() => saveToGist(stateData), 2000);
 }
 
+async function pollForChanges() {
+  if (!isSyncConfigured()) return;
+  try {
+    const res = await fetch(`https://api.github.com/gists/${syncGistId}`, {
+      headers: {
+        Authorization: `token ${syncPat}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+    if (!res.ok) return;
+    const gist = await res.json();
+    const file = gist.files['collection.json'];
+    if (!file) return;
+    const remoteJson = file.content;
+    if (lastSavedJson !== null && remoteJson !== lastSavedJson) {
+      lastSavedJson = remoteJson;
+      const data = JSON.parse(remoteJson);
+      if (onRemoteChange) onRemoteChange(data);
+      emitStatus('synced', 'Updated from remote');
+    } else if (lastSavedJson === null) {
+      lastSavedJson = remoteJson;
+    }
+  } catch {
+    // Silently ignore poll errors
+  }
+}
+
+function startPolling(intervalMs = 10000) {
+  stopPolling();
+  pollTimer = setInterval(pollForChanges, intervalMs);
+}
+
+function stopPolling() {
+  clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+function setLastSavedJson(json) {
+  lastSavedJson = json;
+}
+
 export {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
-  setStatusCallback, loadFromGist, saveToGist, scheduleSave,
+  setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
+  loadFromGist, saveToGist, scheduleSave,
+  startPolling, stopPolling,
 };
