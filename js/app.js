@@ -1213,7 +1213,7 @@ async function init() {
         const remote = loadStateFromData(data);
         if (remote) {
           state = remote;
-          saveState(state);
+          saveStateLocal(state);
         }
       }
       setLastSavedJson(serializeState(state));
