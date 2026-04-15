@@ -469,7 +469,7 @@ main {
 /* ---- Card Picker Modal ---- */
 .modal-content.card-picker-content {
   max-width: 950px;
-  max-height: 90vh;
+  height: 90vh;
   display: flex;
   flex-direction: column;
   overflow-y: hidden;
@@ -813,7 +813,7 @@ main {
   .slot-name { font-size: 0.65rem; }
   .slot-nums { font-size: 0.6rem; }
   .card-picker-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; padding: 0.5rem; }
-  .modal-content.card-picker-content { width: 95%; max-height: 85vh; }
+  .modal-content.card-picker-content { width: 95%; height: 85vh; }
 }
 
 @media (min-width: 600px) and (max-width: 900px) {

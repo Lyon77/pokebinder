@@ -1,18 +1,4 @@
-const CACHE_PREFIX = 'tcg-cache-';
-
-function getCachedCards(name) {
-  try {
-    const raw = localStorage.getItem(CACHE_PREFIX + name.toLowerCase());
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return null;
-}
-
-function cacheCards(name, cards) {
-  try {
-    localStorage.setItem(CACHE_PREFIX + name.toLowerCase(), JSON.stringify(cards));
-  } catch { /* localStorage full — silently fail */ }
-}
+import { getCachedCards, cacheCards } from './db.js';
 
 function parseCard(raw) {
   const num = raw.number || '';
@@ -28,9 +14,13 @@ function parseCard(raw) {
   };
 }
 
-async function fetchCardsForPokemon(name) {
-  const cached = getCachedCards(name);
-  if (cached) return { cards: cached };
+async function fetchCardsForPokemon(name, { skipCache = false } = {}) {
+  if (!skipCache) {
+    try {
+      const cached = await getCachedCards(name);
+      if (cached) return { cards: cached };
+    } catch { /* ignore cache errors */ }
+  }
 
   try {
     const q = encodeURIComponent(`name:"${name}"`);
@@ -39,7 +29,7 @@ async function fetchCardsForPokemon(name) {
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     const json = await res.json();
     const cards = (json.data || []).map(parseCard);
-    cacheCards(name, cards);
+    try { await cacheCards(name, cards); } catch { /* ignore cache errors */ }
     return { cards };
   } catch (err) {
     return { cards: [], error: err.message };

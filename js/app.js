@@ -9,6 +9,7 @@ import { renderBinderView, getTotalViews, getViewPageInfo, parseLayout, getTotal
 import { computeStats, renderStats } from './stats.js';
 import {
   loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
+  loadSettings, saveSettings,
   toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   saveBooks, exportState, importState, resetCaught,
@@ -247,7 +248,7 @@ function renderFormSettings() {
     for (const cat of allCats) state.disabledCategories.add(cat);
     for (const [subKey] of subCats) state.disabledCategories.add(subKey);
     state.disabledCategories.add('other-misc');
-    saveState(state);
+    saveState(state); // fire-and-forget async
     rebuildCollection();
     renderFormSettings();
   });
@@ -256,7 +257,7 @@ function renderFormSettings() {
   enableAllBtn.textContent = 'Enable All';
   enableAllBtn.addEventListener('click', () => {
     state.disabledCategories.clear();
-    saveState(state);
+    saveState(state); // fire-and-forget async
     rebuildCollection();
     renderFormSettings();
   });
@@ -655,6 +656,7 @@ const cardPickerGrid = document.getElementById('card-picker-grid');
 const cardPickerCount = document.getElementById('card-picker-count');
 const cardPickerSelected = document.getElementById('card-picker-selected');
 const cardPickerClose = document.getElementById('card-picker-close');
+const cardPickerRefresh = document.getElementById('card-picker-refresh');
 const cardPickerSave = document.getElementById('card-picker-save');
 const cardPickerClear = document.getElementById('card-picker-clear');
 
@@ -667,6 +669,7 @@ let pickerPreviousFocus = null;
 async function openCardPicker(formId, pokemonName) {
   pickerPreviousFocus = document.activeElement;
   pickerFormId = formId;
+  pickerCurrentName = pokemonName;
   const existingCard = state.cardSelections[formId];
   const isCaught = state.caught.has(formId);
   if (existingCard) {
@@ -698,6 +701,23 @@ async function openCardPicker(formId, pokemonName) {
     if (firstItem) firstItem.focus();
   });
 }
+
+let pickerCurrentName = null;
+
+cardPickerRefresh.addEventListener('click', async () => {
+  if (!pickerCurrentName) return;
+  cardPickerRefresh.disabled = true;
+  cardPickerRefresh.textContent = '...';
+  const result = await fetchCardsForPokemon(pickerCurrentName, { skipCache: true });
+  cardPickerRefresh.disabled = false;
+  cardPickerRefresh.textContent = '\u21BB';
+  if (result.error && result.cards.length === 0) {
+    cardPickerCount.textContent = 'Refresh failed';
+    return;
+  }
+  pickerCards = result.cards;
+  renderPickerCards(pickerCards);
+});
 
 const EMPTY_CARD = { cardId: '__empty__', name: '', number: '', setName: '', setYear: '', rarity: '', imageSmall: '' };
 
@@ -770,6 +790,7 @@ function updatePickerFooter() {
 function closeCardPicker() {
   cardPickerModal.hidden = true;
   pickerFormId = null;
+  pickerCurrentName = null;
   pickerCards = [];
   pickerSelectedCard = null;
 }
@@ -797,6 +818,9 @@ document.addEventListener('keydown', (e) => {
     closeCardPicker();
     restorePickerFocus();
   } else if (e.key === 'Enter') {
+    // Skip if a card item is focused — the grid handler handles select+save
+    const focused = document.activeElement;
+    if (focused && focused.classList.contains('card-picker-item')) return;
     e.preventDefault();
     cardPickerSave.click();
   }
@@ -807,20 +831,25 @@ cardPickerSave.addEventListener('click', () => {
     if (pickerSelectedCard) {
       if (pickerSelectedCard.cardId === '__empty__') {
         clearCardSelection(state, pickerFormId);
+        // Auto-mark as caught
+        if (!state.caught.has(pickerFormId)) {
+          state.caught.add(pickerFormId);
+          saveState(state); // fire-and-forget async
+        }
       } else {
         setCardSelection(state, pickerFormId, pickerSelectedCard);
-      }
-      // Auto-mark as caught
-      if (!state.caught.has(pickerFormId)) {
-        state.caught.add(pickerFormId);
-        saveState(state);
+        // Auto-mark as caught — setCardSelection already saves, but caught may also need saving
+        if (!state.caught.has(pickerFormId)) {
+          state.caught.add(pickerFormId);
+          saveState(state); // fire-and-forget async
+        }
       }
     } else {
       // Deselected — uncaught, clear card
       clearCardSelection(state, pickerFormId);
       if (state.caught.has(pickerFormId)) {
         state.caught.delete(pickerFormId);
-        saveState(state);
+        saveState(state); // fire-and-forget async
       }
     }
   }
@@ -835,7 +864,7 @@ cardPickerClear.addEventListener('click', () => {
     clearCardSelection(state, pickerFormId);
     if (state.caught.has(pickerFormId)) {
       state.caught.delete(pickerFormId);
-      saveState(state);
+      saveState(state); // fire-and-forget async
     }
   }
   closeCardPicker();
@@ -871,6 +900,7 @@ cardPickerGrid.addEventListener('keydown', (e) => {
     if (prev >= 0) items[prev].focus();
   } else if (e.key === 'Enter') {
     e.preventDefault();
+    focused.click(); // select the focused card
     cardPickerSave.click();
   }
 });
@@ -1151,12 +1181,12 @@ function showSyncIndicator(status, message) {
 }
 
 setStatusCallback(showSyncIndicator);
-setRemoteChangeCallback((data) => {
+setRemoteChangeCallback(async (data) => {
   if (data && Array.isArray(data.caught)) {
     const remote = loadStateFromData(data);
     if (remote) {
       state = remote;
-      saveStateLocal(state);
+      await saveStateLocal(state);
       binderLayoutSelect.value = state.binderLayout;
       binderFlowCheck.checked = state.binderFlow === 'row';
       rebuildCollection();
@@ -1194,7 +1224,7 @@ syncSaveBtn.addEventListener('click', async () => {
       const remote = loadStateFromData(data);
       if (remote) {
         state = remote;
-        saveStateLocal(state);
+        await saveStateLocal(state);
         setLastSavedJson(serializeState(state));
         binderLayoutSelect.value = state.binderLayout;
         binderFlowCheck.checked = state.binderFlow === 'row';
@@ -1223,9 +1253,21 @@ syncDisconnectBtn.addEventListener('click', () => {
   updateSyncButton();
 });
 
+// Clean up legacy localStorage keys
+function cleanupLegacyStorage() {
+  localStorage.removeItem('pokedex-tracker');
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('tcg-cache-')) keysToRemove.push(key);
+  }
+  for (const key of keysToRemove) localStorage.removeItem(key);
+}
+
 // Init
 async function init() {
-  state = loadState();
+  cleanupLegacyStorage();
+  state = await loadState();
   await loadPokemonData();
 
   // Try loading from Gist if sync is configured
@@ -1236,7 +1278,7 @@ async function init() {
         const remote = loadStateFromData(data);
         if (remote) {
           state = remote;
-          saveStateLocal(state);
+          await saveStateLocal(state);
         }
       }
       setLastSavedJson(serializeState(state));
@@ -1263,7 +1305,7 @@ document.addEventListener('visibilitychange', async () => {
         if (remote) {
           cancelPendingSave();
           state = remote;
-          saveStateLocal(state);
+          await saveStateLocal(state);
           setLastSavedJson(serializeState(state));
           rebuildCollection();
         }
