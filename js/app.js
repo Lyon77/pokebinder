@@ -20,12 +20,31 @@ import {
 } from './sync.js';
 import { fetchCardsForPokemon } from './tcg-api.js';
 
+const VIEW_STATE_KEY = 'pokebinder-view-state';
+
+function loadViewState() {
+  try {
+    const raw = localStorage.getItem(VIEW_STATE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch { return {}; }
+}
+
+function saveViewState() {
+  localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({
+    currentView,
+    binderViewIndex,
+    selectedBookIndex,
+  }));
+}
+
 let state;
 let collection = [];
 let bookCollection = [];
-let currentView = 'list';
-let binderViewIndex = 0;
-let selectedBookIndex = 0;
+const viewState = loadViewState();
+let currentView = viewState.currentView || 'list';
+let binderViewIndex = viewState.binderViewIndex || 0;
+let selectedBookIndex = viewState.selectedBookIndex || 0;
 
 // DOM refs
 const pokemonListEl = document.getElementById('pokemon-list');
@@ -98,6 +117,7 @@ function renderBinder() {
   binderPrev.disabled = binderViewIndex === 0 && isFirstBook;
   binderNext.disabled = binderViewIndex >= totalViews - 1 && isLastBook;
   renderBookSelector();
+  saveViewState();
 }
 
 function updateStats() {
@@ -147,6 +167,7 @@ function switchView(view) {
   }
 
   renderCurrentView();
+  saveViewState();
 }
 
 const MAIN_CAT_ICONS = { regional: '🌍', mega: '💎', gmax: '⚡' };
@@ -1227,6 +1248,7 @@ async function init() {
   binderFlowCheck.checked = state.binderFlow === 'row';
   updateSyncButton();
   rebuildCollection();
+  switchView(currentView);
 }
 
 // Re-sync when tab becomes visible (Safari suspends timers in background)
