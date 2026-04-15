@@ -1197,6 +1197,8 @@ syncSaveBtn.addEventListener('click', async () => {
         state = remote;
         saveStateLocal(state);
         setLastSavedJson(serializeState(state));
+        binderLayoutSelect.value = state.binderLayout;
+        binderFlowCheck.checked = state.binderFlow === 'row';
         rebuildCollection();
       }
     }
@@ -1204,6 +1206,7 @@ syncSaveBtn.addEventListener('click', async () => {
     syncStatusBox.className = 'sync-status-box connected';
     updateSyncButton();
     startPolling(10000);
+    closeSyncModal();
   } catch (err) {
     syncStatusBox.textContent = 'Error: ' + err.message;
     syncStatusBox.className = 'sync-status-box error';
