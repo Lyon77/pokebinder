@@ -17,7 +17,7 @@ const GENERATION_MAP = {
 // Regional form suffixes
 const REGIONAL_SUFFIXES = ['-alola', '-galar', '-hisui', '-paldea'];
 // Mega form patterns
-const MEGA_PATTERNS = ['-mega', '-mega-x', '-mega-y'];
+const MEGA_PATTERNS = ['-mega', '-mega-x', '-mega-y', '-mega-z', '-primal'];
 // Gigantamax
 const GMAX_PATTERN = '-gmax';
 

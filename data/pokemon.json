@@ -639,7 +639,7 @@
   },
   {
     "id": 29,
-    "name": "Nidoran♀",
+    "name": "Nidoran\u2640",
     "formName": null,
     "formId": "nidoran-f",
     "generation": 1,
@@ -679,7 +679,7 @@
   },
   {
     "id": 32,
-    "name": "Nidoran♂",
+    "name": "Nidoran\u2642",
     "formName": null,
     "formId": "nidoran-m",
     "generation": 1,
@@ -1666,7 +1666,7 @@
   },
   {
     "id": 83,
-    "name": "Farfetch’d",
+    "name": "Farfetch\u2019d",
     "formName": null,
     "formId": "farfetchd",
     "generation": 1,
@@ -1680,7 +1680,7 @@
   },
   {
     "id": 83,
-    "name": "Farfetch’d",
+    "name": "Farfetch\u2019d",
     "formName": "Galarian",
     "formId": "farfetchd-galar",
     "generation": 1,
@@ -6276,7 +6276,7 @@
       "ghost"
     ],
     "isDefault": false,
-    "formCategory": "other",
+    "formCategory": "mega",
     "formSubCategory": null
   },
   {
@@ -6667,7 +6667,7 @@
       "water"
     ],
     "isDefault": false,
-    "formCategory": "other",
+    "formCategory": "mega",
     "formSubCategory": null
   },
   {
@@ -6694,7 +6694,7 @@
       "fire"
     ],
     "isDefault": false,
-    "formCategory": "other",
+    "formCategory": "mega",
     "formSubCategory": null
   },
   {
@@ -7668,7 +7668,7 @@
       "dragon"
     ],
     "isDefault": false,
-    "formCategory": "other",
+    "formCategory": "mega",
     "formSubCategory": null
   },
   {
@@ -7736,7 +7736,7 @@
       "steel"
     ],
     "isDefault": false,
-    "formCategory": "other",
+    "formCategory": "mega",
     "formSubCategory": null
   },
   {
@@ -11343,7 +11343,7 @@
   },
   {
     "id": 669,
-    "name": "Flabébé",
+    "name": "Flab\u00e9b\u00e9",
     "formName": null,
     "formId": "flabebe",
     "generation": 6,
@@ -14795,7 +14795,7 @@
   },
   {
     "id": 865,
-    "name": "Sirfetch’d",
+    "name": "Sirfetch\u2019d",
     "formName": null,
     "formId": "sirfetchd",
     "generation": 8,

@@ -247,7 +247,9 @@ function renderFormSettings() {
     const subCats = getFormSubCategories();
     for (const cat of allCats) state.disabledCategories.add(cat);
     for (const [subKey] of subCats) state.disabledCategories.add(subKey);
-    state.disabledCategories.add('other-misc');
+    // Exclude individual misc forms
+    const miscForms = getOtherFormsWithoutSubCategory();
+    for (const f of miscForms) state.excludedForms.add(f.formId);
     saveState(state); // fire-and-forget async
     rebuildCollection();
     renderFormSettings();
@@ -257,6 +259,7 @@ function renderFormSettings() {
   enableAllBtn.textContent = 'Enable All';
   enableAllBtn.addEventListener('click', () => {
     state.disabledCategories.clear();
+    state.excludedForms.clear();
     saveState(state); // fire-and-forget async
     rebuildCollection();
     renderFormSettings();
@@ -291,10 +294,33 @@ function renderFormSettings() {
     formSettingsBodyEl.appendChild(buildAccordionGroup(subKey, label, icon, forms, false));
   }
 
-  // Other misc (no sub-category)
+  // Other misc (no sub-category) — individual toggles
   const miscForms = getOtherFormsWithoutSubCategory();
   if (miscForms.length > 0) {
-    formSettingsBodyEl.appendChild(buildAccordionGroup('other-misc', 'Other Misc. Forms', '🔄', miscForms, false));
+    const miscDivider = document.createElement('div');
+    miscDivider.className = 'section-divider';
+    miscDivider.textContent = 'Other Individual Forms';
+    formSettingsBodyEl.appendChild(miscDivider);
+
+    for (const f of miscForms) {
+      const isIncluded = !state.excludedForms.has(f.formId);
+      const row = document.createElement('div');
+      row.className = 'form-row misc-form-row';
+      row.innerHTML = `
+        <div class="form-row-left">
+          <span class="form-dex">#${f.id}</span>
+          ${f.name} <span class="form-name-sub">${f.formName ? '(' + f.formName + ')' : ''}</span>
+        </div>
+        <div class="mini-toggle${isIncluded ? ' on' : ''}"></div>
+      `;
+      row.addEventListener('click', () => {
+        toggleExcludedForm(state, f.formId);
+        const mt = row.querySelector('.mini-toggle');
+        mt.classList.toggle('on');
+        rebuildCollection();
+      });
+      formSettingsBodyEl.appendChild(row);
+    }
   }
 }
 

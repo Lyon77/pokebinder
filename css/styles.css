@@ -742,7 +742,7 @@ main {
   transition: max-height 0.3s ease;
   background: var(--bg);
 }
-.cat-group.open .cat-body { max-height: 2000px; }
+.cat-group.open .cat-body { max-height: 5000px; }
 
 .form-row {
   display: flex;
@@ -791,6 +791,13 @@ main {
 
 .cat-group.disabled .cat-body { opacity: 0.4; pointer-events: none; }
 .cat-group.disabled .cat-header { opacity: 0.7; }
+
+.misc-form-row {
+  background: var(--bg);
+  border-radius: var(--radius);
+  margin-bottom: 2px;
+  border: 1px solid var(--border);
+}
 
 .section-divider {
   font-size: 0.75rem;
