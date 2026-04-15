@@ -498,8 +498,9 @@ main {
   border-radius: var(--radius);
   background: var(--bg);
   cursor: pointer;
-  overflow: hidden;
   transition: border-color 0.15s, transform 0.1s;
+  display: flex;
+  flex-direction: column;
 }
 .card-picker-item:hover { border-color: var(--accent); transform: translateY(-2px); }
 .card-picker-item:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -509,6 +510,7 @@ main {
   height: auto;
   display: block;
   background: var(--surface-alt);
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 .card-picker-item-info {
   padding: 0.3rem 0.4rem;
@@ -544,6 +546,7 @@ main {
   font-size: 2.5rem;
   color: var(--caught-border);
   background: var(--caught-bg);
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 
 /* ---- Binder Sidebar ---- */
