@@ -76,7 +76,7 @@ main {
   white-space: nowrap;
   letter-spacing: 0.05em;
 }
-.header-actions { display: flex; gap: 0.3rem; }
+.header-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; }
 
 /* ---- Buttons ---- */
 .btn {
@@ -506,8 +506,7 @@ main {
 .card-picker-item.selected { border-color: var(--caught-border); box-shadow: 0 0 0 2px var(--caught-border); }
 .card-picker-item img {
   width: 100%;
-  aspect-ratio: 2.5 / 3.5;
-  object-fit: contain;
+  height: auto;
   display: block;
   background: var(--surface-alt);
 }
