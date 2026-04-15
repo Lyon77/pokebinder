@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokedex Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="device-top">
+    <div class="led-big"></div>
+    <div class="led-small led-red"></div>
+    <div class="led-small led-yellow"></div>
+    <div class="led-small led-green"></div>
+  </div>
+  <div class="sticky-header">
+    <div class="header-row">
+      <h1>POKEDEX TRACKER</h1>
+      <div class="header-actions">
+        <button id="export-btn" class="btn" title="Export data">Export</button>
+        <label class="btn import-label" title="Import data">
+          Import
+          <input type="file" id="import-input" accept=".json" hidden>
+        </label>
+        <button id="reset-btn" class="btn btn-danger" title="Reset all progress">Reset</button>
+      </div>
+    </div>
+
+    <div id="stats-bar" class="stats-bar">
+      <span id="stats-overall-text" class="stats-bar-label">0 / 0 (0%)</span>
+      <div class="progress-bar"><div id="stats-overall-bar" class="progress-fill"></div></div>
+      <span class="stats-chevron">&#9654;</span>
+    </div>
+    <div id="stats-generations" class="stats-generations collapsed"></div>
+
+    <div class="controls-row">
+      <div class="search-row">
+        <input type="text" id="search-input" class="search-input" placeholder="Search by name or number..." autocomplete="off">
+        <div id="search-dropdown" class="search-dropdown" hidden></div>
+      </div>
+      <button id="form-settings-btn" class="btn">Forms</button>
+      <button id="book-settings-btn" class="btn">Books</button>
+      <div class="view-toggle">
+        <div class="slider"></div>
+        <button id="view-list-btn" class="btn btn-view active" data-view="list">List</button>
+        <button id="view-binder-btn" class="btn btn-view" data-view="binder">Binder</button>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <div id="list-view" class="list-view">
+      <div id="pokemon-list" class="pokemon-list"></div>
+    </div>
+    <div id="binder-view" class="binder-view" hidden>
+      <div class="binder-layout">
+        <div id="binder-container"></div>
+        <div id="binder-controls" class="binder-sidebar">
+          <select id="book-selector" class="binder-select"></select>
+          <select id="binder-layout-select" class="binder-select">
+            <option value="3x3">3 x 3</option>
+            <option value="3x4">3 x 4</option>
+            <option value="4x3">4 x 3</option>
+            <option value="4x4">4 x 4</option>
+          </select>
+          <label class="flow-toggle" title="Number rows across both pages">
+            <input type="checkbox" id="binder-flow-check">
+            Row flow
+          </label>
+          <div class="binder-nav-vertical">
+            <button id="binder-prev" class="btn btn-small">&laquo; Prev</button>
+            <div class="binder-page-editable">
+              Page <input type="number" id="binder-page-input" class="binder-page-input" min="1" value="1"> <span id="binder-page-total">of 1</span>
+            </div>
+            <button id="binder-next" class="btn btn-small">Next &raquo;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <button id="scroll-top-btn" class="scroll-top-btn" hidden aria-label="Scroll to top">&uarr;</button>
+
+  <div id="form-settings-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Form Settings</h2>
+        <button id="modal-close-btn" class="btn btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-description">Choose which alternate forms to include. Click a header to expand. Base forms are always included.</p>
+        <div id="form-settings-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="book-settings-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Book Settings</h2>
+        <button id="book-modal-close-btn" class="btn btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-description">Assign generations to books. Each generation must be in exactly one book.</p>
+        <div id="book-settings-body"></div>
+        <div id="book-unassigned" style="color:var(--accent);font-size:0.85rem;margin-top:0.5rem;"></div>
+        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <button id="book-add-btn" class="btn">+ Add Book</button>
+          <button id="book-remove-btn" class="btn btn-danger">Remove Last Book</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="card-picker-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content card-picker-content">
+      <div class="modal-header">
+        <h2>Cards for <span id="card-picker-name"></span></h2>
+        <button id="card-picker-close" class="btn btn-close">&times;</button>
+      </div>
+      <div class="card-search-bar">
+        <input type="text" id="card-picker-filter" class="search-input" placeholder="Filter by set, number, rarity..." autocomplete="off">
+        <span id="card-picker-count" class="card-picker-count"></span>
+      </div>
+      <div id="card-picker-grid" class="card-picker-grid"></div>
+      <div class="card-picker-footer">
+        <span id="card-picker-selected" class="card-picker-selected-info"></span>
+        <div class="card-picker-actions">
+          <button id="card-picker-clear" class="btn btn-danger">Clear</button>
+          <button id="card-picker-save" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
