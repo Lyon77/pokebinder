@@ -796,7 +796,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     closeCardPicker();
     restorePickerFocus();
-  } else if (e.key === 'Enter' && !document.activeElement.classList.contains('card-picker-item')) {
+  } else if (e.key === 'Enter') {
     e.preventDefault();
     cardPickerSave.click();
   }
@@ -871,7 +871,6 @@ cardPickerGrid.addEventListener('keydown', (e) => {
     if (prev >= 0) items[prev].focus();
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    focused.click();
     cardPickerSave.click();
   }
 });
