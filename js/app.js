@@ -8,7 +8,7 @@ import { renderListView, updateListCaughtState } from './render.js';
 import { renderBinderView, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews } from './binder.js';
 import { computeStats, renderStats } from './stats.js';
 import {
-  loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
+  loadState, saveState, saveStateLocal, serializeState, loadStateFromData, mergeStates,
   toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   saveBooks, exportState, importState, resetCaught,
@@ -1135,8 +1135,8 @@ setRemoteChangeCallback((data) => {
   if (data && Array.isArray(data.caught)) {
     const remote = loadStateFromData(data);
     if (remote) {
-      state = remote;
-      saveStateLocal(state);
+      state = mergeStates(state, remote);
+      saveState(state);
       binderLayoutSelect.value = state.binderLayout;
       binderFlowCheck.checked = state.binderFlow === 'row';
       rebuildCollection();

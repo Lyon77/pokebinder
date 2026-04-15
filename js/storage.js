@@ -212,8 +212,29 @@ function loadStateFromData(data) {
   };
 }
 
+function mergeStates(local, remote) {
+  // caught: union of both sets
+  const mergedCaught = new Set(local.caught);
+  for (const id of remote.caught) mergedCaught.add(id);
+
+  // cardSelections: merge both, remote wins on conflicts
+  const mergedCards = { ...local.cardSelections, ...remote.cardSelections };
+
+  // Settings: take remote
+  return {
+    version: CURRENT_VERSION,
+    caught: mergedCaught,
+    disabledCategories: new Set(remote.disabledCategories),
+    excludedForms: new Set(remote.excludedForms),
+    binderLayout: remote.binderLayout,
+    binderFlow: remote.binderFlow,
+    books: remote.books,
+    cardSelections: mergedCards,
+  };
+}
+
 export {
-  loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
+  loadState, saveState, saveStateLocal, serializeState, loadStateFromData, mergeStates,
   toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   saveBooks, addBook, updateBook, removeBook,
