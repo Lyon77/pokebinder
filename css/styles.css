@@ -19,12 +19,13 @@
   --device-red: #cc0000;
 }
 
-html { font-size: 16px; }
+html { font-size: 16px; overflow-x: hidden; }
 body {
   font-family: 'Roboto Mono', monospace;
   background: var(--device-red);
   color: var(--text);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* ---- Device Frame ---- */
@@ -505,6 +506,8 @@ main {
 .card-picker-item.selected { border-color: var(--caught-border); box-shadow: 0 0 0 2px var(--caught-border); }
 .card-picker-item img {
   width: 100%;
+  aspect-ratio: 2.5 / 3.5;
+  object-fit: contain;
   display: block;
   background: var(--surface-alt);
 }
@@ -806,6 +809,8 @@ main {
   .binder-slot { padding: 0.2rem; }
   .slot-name { font-size: 0.65rem; }
   .slot-nums { font-size: 0.6rem; }
+  .card-picker-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; padding: 0.5rem; }
+  .modal-content.card-picker-content { width: 95%; max-height: 85vh; }
 }
 
 @media (min-width: 600px) and (max-width: 900px) {
