@@ -1174,11 +1174,12 @@ syncSaveBtn.addEventListener('click', async () => {
       const remote = loadStateFromData(data);
       if (remote) {
         state = remote;
-        saveState(state);
+        saveStateLocal(state);
+        setLastSavedJson(serializeState(state));
         rebuildCollection();
       }
     }
-    syncStatusBox.textContent = 'Connected and synced!';
+    syncStatusBox.textContent = 'Connected!';
     syncStatusBox.className = 'sync-status-box connected';
     updateSyncButton();
     startPolling(10000);

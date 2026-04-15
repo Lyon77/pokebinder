@@ -119,6 +119,7 @@ function scheduleSave(stateData) {
 
 async function pollForChanges() {
   if (!isSyncConfigured()) return;
+  emitStatus('loading', 'Checking...');
   try {
     const res = await fetch(`https://api.github.com/gists/${syncGistId}`, {
       headers: {
@@ -126,10 +127,16 @@ async function pollForChanges() {
         Accept: 'application/vnd.github.v3+json',
       },
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      emitStatus('error', 'Poll failed');
+      return;
+    }
     const gist = await res.json();
     const file = gist.files['collection.json'];
-    if (!file) return;
+    if (!file) {
+      emitStatus('synced', 'Synced');
+      return;
+    }
     const remoteJson = file.content;
     if (lastSavedJson !== null && remoteJson !== lastSavedJson) {
       cancelPendingSave();
@@ -137,11 +144,12 @@ async function pollForChanges() {
       const data = JSON.parse(remoteJson);
       if (onRemoteChange) onRemoteChange(data);
       emitStatus('synced', 'Updated from remote');
-    } else if (lastSavedJson === null) {
-      lastSavedJson = remoteJson;
+    } else {
+      if (lastSavedJson === null) lastSavedJson = remoteJson;
+      emitStatus('synced', 'Synced');
     }
   } catch {
-    // Silently ignore poll errors
+    emitStatus('error', 'Poll failed');
   }
 }
 
