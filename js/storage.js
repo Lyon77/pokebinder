@@ -1,3 +1,5 @@
+import { scheduleSave, isSyncConfigured } from './sync.js';
+
 const STORAGE_KEY = 'pokedex-tracker';
 const CURRENT_VERSION = 2;
 
@@ -41,8 +43,8 @@ function defaultState() {
   };
 }
 
-function saveState(state) {
-  const serializable = {
+function serializeState(state) {
+  return {
     version: CURRENT_VERSION,
     caught: [...state.caught],
     disabledCategories: [...state.disabledCategories],
@@ -52,7 +54,14 @@ function saveState(state) {
     books: state.books,
     cardSelections: state.cardSelections,
   };
+}
+
+function saveState(state) {
+  const serializable = serializeState(state);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+  if (isSyncConfigured()) {
+    scheduleSave(serializable);
+  }
 }
 
 function toggleCaught(state, formId) {
@@ -180,8 +189,25 @@ function resetCaught(state) {
   saveState(state);
 }
 
+function loadStateFromData(data) {
+  if (!data || !Array.isArray(data.caught)) return null;
+  return {
+    version: CURRENT_VERSION,
+    caught: new Set(data.caught),
+    disabledCategories: new Set(data.disabledCategories || []),
+    excludedForms: new Set(data.excludedForms || []),
+    binderLayout: data.binderLayout || '3x3',
+    binderFlow: data.binderFlow || 'page',
+    books: Array.isArray(data.books) && data.books.length > 0
+      ? data.books
+      : [...DEFAULT_BOOKS],
+    cardSelections: data.cardSelections || {},
+  };
+}
+
 export {
-  loadState, saveState, toggleCaught, toggleCategory, toggleExcludedForm,
+  loadState, saveState, serializeState, loadStateFromData,
+  toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   saveBooks, addBook, updateBook, removeBook,
   exportState, importState, resetCaught,

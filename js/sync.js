@@ -1,0 +1,115 @@
+const SYNC_PAT_KEY = 'pokebinder-sync-pat';
+const SYNC_GIST_KEY = 'pokebinder-sync-gist-id';
+
+let syncPat = localStorage.getItem(SYNC_PAT_KEY) || '';
+let syncGistId = localStorage.getItem(SYNC_GIST_KEY) || '';
+let saveTimer = null;
+let onSyncStatus = null;
+
+function isSyncConfigured() {
+  return !!(syncPat && syncGistId);
+}
+
+function getSyncConfig() {
+  return { pat: syncPat, gistId: syncGistId };
+}
+
+function setSyncConfig(pat, gistId) {
+  syncPat = pat;
+  syncGistId = gistId;
+  localStorage.setItem(SYNC_PAT_KEY, pat);
+  localStorage.setItem(SYNC_GIST_KEY, gistId);
+}
+
+function clearSyncConfig() {
+  syncPat = '';
+  syncGistId = '';
+  localStorage.removeItem(SYNC_PAT_KEY);
+  localStorage.removeItem(SYNC_GIST_KEY);
+}
+
+function setStatusCallback(cb) {
+  onSyncStatus = cb;
+}
+
+function emitStatus(status, message) {
+  if (onSyncStatus) onSyncStatus(status, message);
+}
+
+async function loadFromGist() {
+  if (!isSyncConfigured()) return null;
+  emitStatus('loading', 'Syncing...');
+  try {
+    const res = await fetch(`https://api.github.com/gists/${syncGistId}`, {
+      headers: {
+        Authorization: `token ${syncPat}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        emitStatus('error', 'Bad token');
+        throw new Error('Invalid or expired token');
+      }
+      if (res.status === 404) {
+        emitStatus('error', 'Gist not found');
+        throw new Error('Gist not found');
+      }
+      throw new Error(`GitHub API error: ${res.status}`);
+    }
+    const gist = await res.json();
+    const file = gist.files['collection.json'];
+    if (!file) {
+      emitStatus('synced', 'Synced (empty)');
+      return null;
+    }
+    const data = JSON.parse(file.content);
+    emitStatus('synced', 'Synced');
+    return data;
+  } catch (err) {
+    if (!err.message.includes('Invalid') && !err.message.includes('not found')) {
+      emitStatus('error', 'Sync failed');
+    }
+    throw err;
+  }
+}
+
+async function saveToGist(stateData) {
+  if (!isSyncConfigured()) return;
+  emitStatus('saving', 'Saving...');
+  try {
+    const res = await fetch(`https://api.github.com/gists/${syncGistId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `token ${syncPat}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        files: {
+          'collection.json': {
+            content: JSON.stringify(stateData, null, 2),
+          },
+        },
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`GitHub API error: ${res.status}`);
+    }
+    emitStatus('synced', 'Synced');
+  } catch (err) {
+    emitStatus('error', 'Save failed');
+    console.error('Gist save failed:', err);
+  }
+}
+
+function scheduleSave(stateData) {
+  if (!isSyncConfigured()) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveToGist(stateData), 2000);
+}
+
+export {
+  isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
+  setStatusCallback, loadFromGist, saveToGist, scheduleSave,
+};

@@ -8,10 +8,15 @@ import { renderListView, updateListCaughtState } from './render.js';
 import { renderBinderView, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews } from './binder.js';
 import { computeStats, renderStats } from './stats.js';
 import {
-  loadState, saveState, toggleCaught, toggleCategory, toggleExcludedForm,
+  loadState, saveState, loadStateFromData,
+  toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   saveBooks, exportState, importState, resetCaught,
 } from './storage.js';
+import {
+  isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
+  setStatusCallback, loadFromGist,
+} from './sync.js';
 import { fetchCardsForPokemon } from './tcg-api.js';
 
 let state;
@@ -1100,12 +1105,108 @@ formSettingsModal.querySelector('.modal-backdrop').addEventListener('click', () 
   formSettingsModal.hidden = true;
 });
 
+// --- Sync UI ---
+const syncBtn = document.getElementById('sync-btn');
+const syncModal = document.getElementById('sync-modal');
+const syncModalClose = document.getElementById('sync-modal-close');
+const syncPatInput = document.getElementById('sync-pat-input');
+const syncGistInput = document.getElementById('sync-gist-input');
+const syncSaveBtn = document.getElementById('sync-save-btn');
+const syncDisconnectBtn = document.getElementById('sync-disconnect-btn');
+const syncStatusBox = document.getElementById('sync-status-box');
+const syncIndicator = document.getElementById('sync-indicator');
+
+function updateSyncButton() {
+  syncBtn.classList.toggle('connected', isSyncConfigured());
+}
+
+function showSyncIndicator(status, message) {
+  syncIndicator.textContent = message;
+  syncIndicator.className = 'sync-indicator ' + status;
+  syncIndicator.hidden = false;
+  if (status === 'synced') {
+    setTimeout(() => { syncIndicator.hidden = true; }, 2000);
+  }
+}
+
+setStatusCallback(showSyncIndicator);
+
+syncBtn.addEventListener('click', () => {
+  const config = getSyncConfig();
+  syncPatInput.value = config.pat;
+  syncGistInput.value = config.gistId;
+  syncStatusBox.textContent = isSyncConfigured() ? 'Connected' : 'Not connected';
+  syncStatusBox.className = 'sync-status-box ' + (isSyncConfigured() ? 'connected' : '');
+  syncModal.hidden = false;
+});
+
+function closeSyncModal() { syncModal.hidden = true; }
+syncModalClose.addEventListener('click', closeSyncModal);
+syncModal.querySelector('.modal-backdrop').addEventListener('click', closeSyncModal);
+
+syncSaveBtn.addEventListener('click', async () => {
+  const pat = syncPatInput.value.trim();
+  const gistId = syncGistInput.value.trim();
+  if (!pat || !gistId) {
+    syncStatusBox.textContent = 'Please enter both fields';
+    syncStatusBox.className = 'sync-status-box error';
+    return;
+  }
+  setSyncConfig(pat, gistId);
+  syncStatusBox.textContent = 'Testing connection...';
+  syncStatusBox.className = 'sync-status-box';
+  try {
+    const data = await loadFromGist();
+    if (data && Array.isArray(data.caught)) {
+      const remote = loadStateFromData(data);
+      if (remote) {
+        state = remote;
+        saveState(state);
+        rebuildCollection();
+      }
+    }
+    syncStatusBox.textContent = 'Connected and synced!';
+    syncStatusBox.className = 'sync-status-box connected';
+    updateSyncButton();
+  } catch (err) {
+    syncStatusBox.textContent = 'Error: ' + err.message;
+    syncStatusBox.className = 'sync-status-box error';
+    clearSyncConfig();
+    updateSyncButton();
+  }
+});
+
+syncDisconnectBtn.addEventListener('click', () => {
+  clearSyncConfig();
+  syncStatusBox.textContent = 'Disconnected. Data remains in this browser.';
+  syncStatusBox.className = 'sync-status-box';
+  updateSyncButton();
+});
+
 // Init
 async function init() {
   state = loadState();
   await loadPokemonData();
+
+  // Try loading from Gist if sync is configured
+  if (isSyncConfigured()) {
+    try {
+      const data = await loadFromGist();
+      if (data && Array.isArray(data.caught)) {
+        const remote = loadStateFromData(data);
+        if (remote) {
+          state = remote;
+          saveState(state);
+        }
+      }
+    } catch {
+      // Fall back to local state silently
+    }
+  }
+
   binderLayoutSelect.value = state.binderLayout;
   binderFlowCheck.checked = state.binderFlow === 'row';
+  updateSyncButton();
   rebuildCollection();
 }
 

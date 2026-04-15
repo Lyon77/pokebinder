@@ -815,3 +815,111 @@ main {
 @media (min-width: 1200px) {
   .binder-grid { max-width: 900px; }
 }
+
+/* ---- Sync UI ---- */
+.btn-sync { position: relative; }
+.btn-sync.connected::after {
+  content: '';
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--caught-border);
+  box-shadow: 0 0 4px rgba(0,255,68,0.6);
+}
+
+.sync-modal-content { max-width: 420px; }
+
+.sync-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.75rem;
+}
+.sync-input {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+.sync-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.sync-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.btn-primary {
+  background: var(--caught-border);
+  color: #000;
+  border: none;
+  font-weight: 600;
+}
+.btn-primary:hover { background: #00cc36; }
+
+.sync-status-box {
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  min-height: 1.6rem;
+}
+.sync-status-box.connected {
+  border-color: var(--caught-border);
+  color: var(--caught-border);
+}
+.sync-status-box.error {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sync-help {
+  margin-top: 1rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.sync-help summary {
+  cursor: pointer;
+  color: var(--text);
+}
+.sync-help ol {
+  margin: 0.5rem 0 0 1.2rem;
+  line-height: 1.6;
+}
+.sync-help code {
+  background: var(--bg);
+  padding: 0.1rem 0.3rem;
+  border-radius: 2px;
+  font-size: 0.75rem;
+}
+.sync-help a { color: var(--blue-led); }
+
+.sync-indicator {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  z-index: 50;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  font-family: inherit;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  transition: opacity 0.3s;
+}
+.sync-indicator.saving { color: var(--yellow-led); border-color: var(--yellow-led); }
+.sync-indicator.loading { color: var(--blue-led); border-color: var(--blue-led); }
+.sync-indicator.synced { color: var(--caught-border); border-color: var(--caught-border); }
+.sync-indicator.error { color: var(--accent); border-color: var(--accent); }
+.sync-indicator[hidden] { display: none; }
