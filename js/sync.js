@@ -103,7 +103,7 @@ async function saveToGist(stateData) {
     if (!res.ok) {
       throw new Error(`GitHub API error: ${res.status}`);
     }
-    lastSavedJson = JSON.stringify(stateData);
+    lastSavedJson = JSON.stringify(stateData, null, 2);
     emitStatus('synced', 'Synced');
   } catch (err) {
     emitStatus('error', 'Save failed');
@@ -132,6 +132,7 @@ async function pollForChanges() {
     if (!file) return;
     const remoteJson = file.content;
     if (lastSavedJson !== null && remoteJson !== lastSavedJson) {
+      cancelPendingSave();
       lastSavedJson = remoteJson;
       const data = JSON.parse(remoteJson);
       if (onRemoteChange) onRemoteChange(data);
@@ -154,13 +155,18 @@ function stopPolling() {
   pollTimer = null;
 }
 
-function setLastSavedJson(json) {
-  lastSavedJson = json;
+function setLastSavedJson(data) {
+  lastSavedJson = JSON.stringify(data, null, 2);
+}
+
+function cancelPendingSave() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
 }
 
 export {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
   setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
-  loadFromGist, saveToGist, scheduleSave,
+  loadFromGist, saveToGist, scheduleSave, cancelPendingSave,
   startPolling, stopPolling,
 };

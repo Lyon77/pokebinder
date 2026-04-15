@@ -8,7 +8,7 @@ import { renderListView, updateListCaughtState } from './render.js';
 import { renderBinderView, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews } from './binder.js';
 import { computeStats, renderStats } from './stats.js';
 import {
-  loadState, saveState, saveStateLocal, serializeState, loadStateFromData, mergeStates,
+  loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
   toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   saveBooks, exportState, importState, resetCaught,
@@ -16,7 +16,7 @@ import {
 import {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
   setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
-  loadFromGist, startPolling, stopPolling,
+  loadFromGist, cancelPendingSave, startPolling, stopPolling,
 } from './sync.js';
 import { fetchCardsForPokemon } from './tcg-api.js';
 
@@ -1135,8 +1135,8 @@ setRemoteChangeCallback((data) => {
   if (data && Array.isArray(data.caught)) {
     const remote = loadStateFromData(data);
     if (remote) {
-      state = mergeStates(state, remote);
-      saveState(state);
+      state = remote;
+      saveStateLocal(state);
       binderLayoutSelect.value = state.binderLayout;
       binderFlowCheck.checked = state.binderFlow === 'row';
       rebuildCollection();
@@ -1215,7 +1215,7 @@ async function init() {
           saveState(state);
         }
       }
-      setLastSavedJson(JSON.stringify(serializeState(state)));
+      setLastSavedJson(serializeState(state));
       startPolling(10000);
     } catch {
       // Fall back to local state silently
@@ -1227,5 +1227,26 @@ async function init() {
   updateSyncButton();
   rebuildCollection();
 }
+
+// Re-sync when tab becomes visible (Safari suspends timers in background)
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && isSyncConfigured()) {
+    try {
+      const data = await loadFromGist();
+      if (data && Array.isArray(data.caught)) {
+        const remote = loadStateFromData(data);
+        if (remote) {
+          cancelPendingSave();
+          state = remote;
+          saveStateLocal(state);
+          setLastSavedJson(serializeState(state));
+          rebuildCollection();
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+});
 
 init();
