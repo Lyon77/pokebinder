@@ -46,7 +46,32 @@ function buildMasterCollection(state) {
 }
 
 function buildFreestyleCollection(state) {
-  const slots = state.slots || [];
+  const [cols, rows] = (state.layout || '3x3').split('x').map(Number);
+  const perPage = cols * rows;
+  const rawSlots = state.slots || [];
+
+  // Find last filled slot index
+  let lastFilled = -1;
+  for (let i = rawSlots.length - 1; i >= 0; i--) {
+    if (rawSlots[i]) { lastFilled = i; break; }
+  }
+
+  // Minimum 3 pages, or 2 pages past the last filled slot's page
+  const lastFilledPage = lastFilled >= 0 ? Math.floor(lastFilled / perPage) : -1;
+  const totalPages = Math.max(3, lastFilledPage + 3);
+  const totalSlots = totalPages * perPage;
+
+  // Expand slots array if needed (persisted array may be smaller)
+  const slots = new Array(totalSlots).fill(null);
+  for (let i = 0; i < rawSlots.length && i < totalSlots; i++) {
+    slots[i] = rawSlots[i];
+  }
+
+  // Update state.slots if it grew
+  if (slots.length > rawSlots.length) {
+    state.slots = slots;
+  }
+
   return slots.map((slot, i) => {
     if (!slot) {
       return {

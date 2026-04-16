@@ -418,8 +418,6 @@ const createConfirmBtn = document.getElementById('create-confirm-btn');
 const createSetSearch = document.getElementById('create-set-search');
 const createSetResults = document.getElementById('create-set-results');
 const createSelectedSets = document.getElementById('create-selected-sets');
-const createPageCount = document.getElementById('create-page-count');
-const createSlotCount = document.getElementById('create-slot-count');
 const createProgress = document.getElementById('create-progress');
 const createProgressBar = document.getElementById('create-progress-bar');
 const createProgressText = createProgress ? createProgress.querySelector('.create-progress-text') : null;
@@ -490,7 +488,6 @@ for (const card of document.querySelectorAll('.type-card')) {
     showCreateStep(2);
     if (createType === 'pokedex') renderGenGrid();
     if (createType === 'master') renderMasterConfig();
-    if (createType === 'freestyle') renderFreestyleConfig();
     renderLayoutPicker(createType);
   });
 }
@@ -540,7 +537,6 @@ function renderLayoutPicker(type) {
     opt.addEventListener('click', () => {
       createSelectedLayout = layout;
       renderLayoutPicker(type);
-      if (type === 'freestyle') updateFreestyleSlotCount();
     });
     container.appendChild(opt);
   }
@@ -638,19 +634,6 @@ function renderSelectedSets() {
   }
 }
 
-// Freestyle config
-function renderFreestyleConfig() {
-  updateFreestyleSlotCount();
-}
-
-createPageCount.addEventListener('input', updateFreestyleSlotCount);
-
-function updateFreestyleSlotCount() {
-  const [cols, rows] = createSelectedLayout.split('x').map(Number);
-  const pages = parseInt(createPageCount.value, 10) || 1;
-  createSlotCount.textContent = `= ${pages * cols * rows} slots`;
-}
-
 // Create button
 createConfirmBtn.addEventListener('click', async () => {
   if (!canCreate()) return;
@@ -705,9 +688,7 @@ createConfirmBtn.addEventListener('click', async () => {
       await yield_();
     } else if (createType === 'freestyle') {
       const [cols, rows] = createSelectedLayout.split('x').map(Number);
-      const pages = parseInt(createPageCount.value, 10) || 1;
-      record.pageCount = pages;
-      record.slots = new Array(pages * cols * rows).fill(null);
+      record.slots = new Array(3 * cols * rows).fill(null);
       record.books = [];
     }
 

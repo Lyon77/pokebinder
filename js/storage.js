@@ -58,7 +58,6 @@ function recordToState(record) {
     state.sets = record.sets || [];
     state.slotList = record.slotList || [];
   } else if (type === 'freestyle') {
-    state.pageCount = record.pageCount || 1;
     state.slots = record.slots || [];
   }
 
@@ -85,7 +84,6 @@ function stateToRecord(state) {
     record.sets = state.sets || [];
     record.slotList = state.slotList || [];
   } else if (type === 'freestyle') {
-    record.pageCount = state.pageCount || 1;
     record.slots = state.slots || [];
   }
 
