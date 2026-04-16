@@ -1044,6 +1044,12 @@ main {
 .selected-set-slots { font-size: 0.6rem; color: var(--caught-border); }
 .btn-remove { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.9rem; }
 
+.create-progress {
+  padding: 0.5rem 1rem; border-top: 1px solid var(--border);
+}
+.create-progress[hidden] { display: none; }
+.create-progress-text { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+
 .create-modal-footer {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.75rem 1rem; border-top: 1px solid var(--border);

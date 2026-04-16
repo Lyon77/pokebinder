@@ -420,6 +420,9 @@ const createSetResults = document.getElementById('create-set-results');
 const createSelectedSets = document.getElementById('create-selected-sets');
 const createPageCount = document.getElementById('create-page-count');
 const createSlotCount = document.getElementById('create-slot-count');
+const createProgress = document.getElementById('create-progress');
+const createProgressBar = document.getElementById('create-progress-bar');
+const createProgressText = createProgress ? createProgress.querySelector('.create-progress-text') : null;
 
 let createType = null;
 let createSelectedLayout = '3x3';
@@ -442,7 +445,10 @@ function openCreateModal() {
   createStep = 1;
   createNameInput.value = '';
   createConfirmBtn.disabled = true;
+  createConfirmBtn.textContent = 'Create';
   createBackBtn.hidden = true;
+  createProgress.hidden = true;
+  createProgressBar.style.width = '0%';
   showCreateStep(1);
   for (const card of document.querySelectorAll('.type-card')) card.classList.remove('selected');
   createModal.hidden = false;
@@ -490,7 +496,13 @@ for (const card of document.querySelectorAll('.type-card')) {
 }
 
 createBackBtn.addEventListener('click', () => showCreateStep(1));
-createNameInput.addEventListener('input', () => { createConfirmBtn.disabled = !canCreate(); });
+createNameInput.addEventListener('input', () => {
+  createConfirmBtn.disabled = !canCreate();
+  // Update button text to indicate readiness
+  if (canCreate()) {
+    createConfirmBtn.textContent = 'Create';
+  }
+});
 
 // Gen grid
 function renderGenGrid() {
@@ -574,15 +586,26 @@ createSetSearch.addEventListener('input', () => {
       `;
       el.querySelector('.btn-add').addEventListener('click', async (e) => {
         const btn = e.target;
-        btn.textContent = '...';
+        btn.textContent = 'Fetching...';
         btn.disabled = true;
-        const cardResult = await fetchSetCards(s.id);
-        const slotList = expandVariants(cardResult.cards);
-        createSets.push({ id: s.id, name: s.name, year: s.year, total: s.total, slotCount: slotList.length, slotList });
-        renderSelectedSets();
-        createConfirmBtn.disabled = !canCreate();
-        // Remove from results
-        el.remove();
+        const meta = el.querySelector('.set-result-meta');
+        const origMeta = meta.textContent;
+        meta.textContent = `Fetching ${s.total} cards...`;
+        try {
+          const cardResult = await fetchSetCards(s.id);
+          meta.textContent = `Expanding variants...`;
+          // Yield to UI before heavy computation
+          await new Promise(r => setTimeout(r, 0));
+          const slotList = expandVariants(cardResult.cards);
+          createSets.push({ id: s.id, name: s.name, year: s.year, total: s.total, slotCount: slotList.length, slotList });
+          renderSelectedSets();
+          createConfirmBtn.disabled = !canCreate();
+          el.remove();
+        } catch (err) {
+          meta.textContent = origMeta;
+          btn.textContent = 'Retry';
+          btn.disabled = false;
+        }
       });
       createSetResults.appendChild(el);
     }
@@ -634,55 +657,76 @@ createConfirmBtn.addEventListener('click', async () => {
   createConfirmBtn.disabled = true;
   createConfirmBtn.textContent = 'Creating...';
 
-  const name = createNameInput.value.trim();
-  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
+  try {
+    createProgress.hidden = false;
+    createProgressText.textContent = 'Preparing collection...';
+    createProgressBar.style.width = '10%';
 
-  const record = {
-    id,
-    name,
-    type: createType,
-    layout: createSelectedLayout,
-    caught: [],
-    books: [],
-  };
+    const name = createNameInput.value.trim();
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
 
-  if (createType === 'pokedex') {
-    const gens = [...createGens].sort((a, b) => a - b);
-    record.generations = gens;
-    record.cardSelections = {};
-    record.disabledCategories = [];
-    record.excludedForms = [];
-    record.books = [{ generations: gens }];
-  } else if (createType === 'master') {
-    record.sets = createSets.map(s => s.id);
-    // Merge all slot lists
-    const allSlots = [];
-    for (const s of createSets) {
-      allSlots.push(...s.slotList);
+    const record = {
+      id,
+      name,
+      type: createType,
+      layout: createSelectedLayout,
+      caught: [],
+      books: [],
+    };
+
+    if (createType === 'pokedex') {
+      const gens = [...createGens].sort((a, b) => a - b);
+      record.generations = gens;
+      record.cardSelections = {};
+      record.disabledCategories = [];
+      record.excludedForms = [];
+      record.books = [{ generations: gens }];
+    } else if (createType === 'master') {
+      record.sets = createSets.map(s => s.id);
+      const allSlots = [];
+      for (const s of createSets) {
+        allSlots.push(...s.slotList);
+      }
+      record.slotList = allSlots;
+      record.books = createSets.map(s => ({ sets: [s.id], name: s.name }));
+    } else if (createType === 'freestyle') {
+      const [cols, rows] = createSelectedLayout.split('x').map(Number);
+      const pages = parseInt(createPageCount.value, 10) || 1;
+      record.pageCount = pages;
+      record.slots = new Array(pages * cols * rows).fill(null);
+      record.books = [];
     }
-    record.slotList = allSlots;
-    record.books = createSets.map(s => ({ sets: [s.id], name: s.name }));
-  } else if (createType === 'freestyle') {
-    const [cols, rows] = createSelectedLayout.split('x').map(Number);
-    const pages = parseInt(createPageCount.value, 10) || 1;
-    record.pageCount = pages;
-    record.slots = new Array(pages * cols * rows).fill(null);
-    record.books = [];
+
+    createProgressText.textContent = 'Saving to database...';
+    createProgressBar.style.width = '40%';
+    await saveCollection(record);
+
+    createProgressText.textContent = 'Loading collection...';
+    createProgressBar.style.width = '70%';
+    setActiveCollectionId(id);
+    state = await loadState();
+    selectedBookIndex = 0;
+    binderViewIndex = 0;
+
+    createProgressText.textContent = 'Building binder...';
+    createProgressBar.style.width = '90%';
+    // Yield to UI before heavy render
+    await new Promise(r => setTimeout(r, 0));
+    updateTypeAwareControls();
+    rebuildCollection();
+    if (state.type !== 'pokedex') switchView('binder');
+    else switchView(currentView);
+
+    createProgressBar.style.width = '100%';
+    createProgress.hidden = true;
+    closeCreateModal();
+  } catch (err) {
+    createProgress.hidden = true;
+    console.error('Failed to create collection:', err);
+    alert('Failed to create collection: ' + err.message);
   }
-
-  await saveCollection(record);
-  setActiveCollectionId(id);
-  state = await loadState();
-  selectedBookIndex = 0;
-  binderViewIndex = 0;
-  updateTypeAwareControls();
-  rebuildCollection();
-  if (state.type !== 'pokedex') switchView('binder');
-  else switchView(currentView);
-
   createConfirmBtn.textContent = 'Create';
   createConfirmBtn.disabled = false;
-  closeCreateModal();
 });
 
 // ---- Form settings (pokedex only) ----
