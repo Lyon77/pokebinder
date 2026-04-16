@@ -121,6 +121,8 @@ function scheduleSave(stateData) {
 
 async function pollForChanges() {
   if (!isSyncConfigured()) return;
+  // Skip pull if there's a pending local save waiting to push
+  if (saveTimer) return;
   emitStatus('loading', 'Checking...');
   try {
     const res = await fetch(`https://api.github.com/gists/${syncGistId}`, {

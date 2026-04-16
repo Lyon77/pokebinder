@@ -1869,7 +1869,7 @@ syncSaveBtn.addEventListener('click', async () => {
     syncStatusBox.textContent = 'Connected!';
     syncStatusBox.className = 'sync-status-box connected';
     updateSyncButton();
-    startPolling(10000);
+    startPolling(30000);
     closeSyncModal();
   } catch (err) {
     syncStatusBox.textContent = 'Error: ' + err.message;
@@ -1916,7 +1916,7 @@ async function init() {
         }
       }
       setLastSavedJson(serializeState(state));
-      startPolling(10000);
+      startPolling(30000);
     } catch { /* Fall back to local state */ }
   }
 
