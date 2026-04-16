@@ -114,6 +114,8 @@ async function saveToGist(stateData) {
 function scheduleSave(stateData) {
   if (!isSyncConfigured()) return;
   clearTimeout(saveTimer);
+  // Update lastSavedJson immediately so polls don't overwrite with stale remote data
+  lastSavedJson = JSON.stringify(stateData, null, 2);
   saveTimer = setTimeout(() => saveToGist(stateData), 2000);
 }
 
