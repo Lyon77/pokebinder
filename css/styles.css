@@ -973,7 +973,7 @@ main {
 .collection-dd-check { width: 1rem; text-align: center; }
 .collection-dd-rename, .collection-dd-delete {
   background: none; border: none; color: var(--text-muted); cursor: pointer;
-  font-size: 0.6rem; padding: 0 0.2rem; line-height: 1; font-family: inherit;
+  font-size: 0.9rem; padding: 0 0.2rem; line-height: 1;
 }
 .collection-dd-rename:hover { color: var(--caught-border); }
 .collection-dd-delete:hover { color: var(--accent); }

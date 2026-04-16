@@ -338,7 +338,7 @@ collectionTitle.addEventListener('click', async (e) => {
       </div>
       <div class="collection-dd-right">
         <span class="collection-dd-type">${typeBadge}</span>
-        <button class="collection-dd-rename" data-rename-id="${c.id}" title="Rename">edit</button>
+        <button class="collection-dd-rename" data-rename-id="${c.id}" title="Rename">&#9998;</button>
         ${collections.length > 1 ? `<button class="collection-dd-delete" data-delete-id="${c.id}" title="Delete">&times;</button>` : ''}
       </div>
     `;
