@@ -657,10 +657,13 @@ createConfirmBtn.addEventListener('click', async () => {
   createConfirmBtn.disabled = true;
   createConfirmBtn.textContent = 'Creating...';
 
+  const yield_ = () => new Promise(r => setTimeout(r, 0));
+
   try {
     createProgress.hidden = false;
     createProgressText.textContent = 'Preparing collection...';
-    createProgressBar.style.width = '10%';
+    createProgressBar.style.width = '5%';
+    await yield_();
 
     const name = createNameInput.value.trim();
     const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
@@ -682,13 +685,24 @@ createConfirmBtn.addEventListener('click', async () => {
       record.excludedForms = [];
       record.books = [{ generations: gens }];
     } else if (createType === 'master') {
+      createProgressText.textContent = `Merging ${createSets.length} set(s)...`;
+      createProgressBar.style.width = '15%';
+      await yield_();
+
       record.sets = createSets.map(s => s.id);
       const allSlots = [];
-      for (const s of createSets) {
+      for (let si = 0; si < createSets.length; si++) {
+        const s = createSets[si];
         allSlots.push(...s.slotList);
+        createProgressText.textContent = `Merging sets... (${si + 1}/${createSets.length})`;
+        createProgressBar.style.width = `${15 + (si + 1) / createSets.length * 20}%`;
+        await yield_();
       }
       record.slotList = allSlots;
       record.books = createSets.map(s => ({ sets: [s.id], name: s.name }));
+      createProgressText.textContent = `${allSlots.length} total slots ready`;
+      createProgressBar.style.width = '40%';
+      await yield_();
     } else if (createType === 'freestyle') {
       const [cols, rows] = createSelectedLayout.split('x').map(Number);
       const pages = parseInt(createPageCount.value, 10) || 1;
@@ -698,11 +712,13 @@ createConfirmBtn.addEventListener('click', async () => {
     }
 
     createProgressText.textContent = 'Saving to database...';
-    createProgressBar.style.width = '40%';
+    createProgressBar.style.width = '50%';
+    await yield_();
     await saveCollection(record);
 
     createProgressText.textContent = 'Loading collection...';
     createProgressBar.style.width = '70%';
+    await yield_();
     setActiveCollectionId(id);
     state = await loadState();
     selectedBookIndex = 0;
@@ -710,14 +726,14 @@ createConfirmBtn.addEventListener('click', async () => {
 
     createProgressText.textContent = 'Building binder...';
     createProgressBar.style.width = '90%';
-    // Yield to UI before heavy render
-    await new Promise(r => setTimeout(r, 0));
+    await yield_();
     updateTypeAwareControls();
     rebuildCollection();
     if (state.type !== 'pokedex') switchView('binder');
     else switchView(currentView);
 
     createProgressBar.style.width = '100%';
+    await yield_();
     createProgress.hidden = true;
     closeCreateModal();
   } catch (err) {

@@ -138,6 +138,9 @@ function expandVariants(rawCards) {
     return vi(a.variant) - vi(b.variant);
   });
 
+  // Remove rawNumber — only needed for sorting, not storage
+  for (const slot of slots) delete slot.rawNumber;
+
   return slots;
 }
 

@@ -34,7 +34,7 @@ function buildMasterCollection(state) {
   return slots.map((slot, i) => ({
     ...slot,
     formId: slot.slotId,
-    id: slot.rawNumber ? parseInt(slot.rawNumber, 10) : i + 1,
+    id: slot.number ? parseInt(slot.number, 10) || (i + 1) : i + 1,
     collectionNum: i + 1,
     generation: 0, // not applicable
     isDefault: true,
