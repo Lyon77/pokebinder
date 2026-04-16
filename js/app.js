@@ -1518,6 +1518,10 @@ cardPickerFilter.addEventListener('keydown', (e) => {
     e.preventDefault();
     const firstItem = cardPickerGrid.querySelector('.card-picker-item');
     if (firstItem) firstItem.focus();
+  } else if (e.key === 'Enter' && pickerMode === 'pokemon-search') {
+    e.preventDefault();
+    const items = cardPickerGrid.querySelectorAll('.card-picker-item');
+    if (items.length === 1) items[0].click();
   }
 });
 
