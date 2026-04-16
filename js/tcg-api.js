@@ -129,10 +129,24 @@ function expandVariants(rawCards) {
     }
   }
 
-  // Sort by card number (numeric), then variant order
+  // Parse card number into [prefix, numeric] for sorting
+  // "1" → ["", 1], "H1" → ["H", 1], "TG1" → ["TG", 1], "SH5" → ["SH", 5]
+  function parseCardNum(raw) {
+    const match = (raw || '').match(/^([A-Za-z]*)(\d+)$/);
+    if (!match) return [raw || '', 0];
+    return [match[1].toUpperCase(), parseInt(match[2], 10)];
+  }
+
+  // Sort: pure numeric first, then prefixed groups alphabetically, then numeric within group, then variant
   slots.sort((a, b) => {
-    const numA = parseInt(a.rawNumber, 10) || 0;
-    const numB = parseInt(b.rawNumber, 10) || 0;
+    const [prefA, numA] = parseCardNum(a.rawNumber);
+    const [prefB, numB] = parseCardNum(b.rawNumber);
+    // Pure numeric (empty prefix) sorts before any prefix
+    if (prefA !== prefB) {
+      if (!prefA) return -1;
+      if (!prefB) return 1;
+      return prefA.localeCompare(prefB);
+    }
     if (numA !== numB) return numA - numB;
     const vi = (v) => { const i = VARIANT_ORDER.indexOf(v); return i === -1 ? 99 : i; };
     return vi(a.variant) - vi(b.variant);
