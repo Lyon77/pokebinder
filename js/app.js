@@ -1413,13 +1413,19 @@ document.addEventListener('keydown', (e) => {
 });
 
 cardPickerSave.addEventListener('click', () => {
+  console.log('[Save] pickerFormId:', pickerFormId, 'type:', state.type, 'selectedCard:', pickerSelectedCard?.cardId);
+
   if (!pickerFormId) { closeCardPicker(); return; }
 
   if (state.type === 'freestyle') {
     const idx = parseInt(pickerFormId, 10);
+    console.log('[Save freestyle] idx:', idx, 'card:', pickerSelectedCard?.name, 'slots length:', state.slots?.length);
     if (pickerSelectedCard && pickerSelectedCard.cardId !== '__empty__') {
       setFreestyleSlot(state, idx, pickerSelectedCard);
+      console.log('[Save freestyle] slot set, slots[idx]:', state.slots[idx]?.name);
       rebuildCollection();
+    } else {
+      console.log('[Save freestyle] SKIPPED — no card selected or empty card');
     }
   } else if (state.type === 'pokedex') {
     if (pickerSelectedCard) {
