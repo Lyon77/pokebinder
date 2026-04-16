@@ -10,17 +10,22 @@ import { computeStats, renderStats } from './stats.js';
 import {
   loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
   loadSettings, saveSettings,
+  getActiveCollectionId, setActiveCollectionId,
   toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
+  setFreestyleSlot, clearFreestyleSlot,
   saveBooks, exportState, importState, resetCaught,
+  defaultCollectionRecord,
 } from './storage.js';
 import {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
   setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
   loadFromGist, cancelPendingSave, startPolling, stopPolling,
 } from './sync.js';
-import { fetchCardsForPokemon } from './tcg-api.js';
+import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants } from './tcg-api.js';
+import { getAllCollections, deleteCollection, saveCollection } from './db.js';
 
+// ---- View State ----
 const VIEW_STATE_KEY = 'pokebinder-view-state';
 
 function loadViewState() {
@@ -47,7 +52,7 @@ let currentView = viewState.currentView || 'list';
 let binderViewIndex = viewState.binderViewIndex || 0;
 let selectedBookIndex = viewState.selectedBookIndex || 0;
 
-// DOM refs
+// ---- DOM refs ----
 const pokemonListEl = document.getElementById('pokemon-list');
 const binderContainerEl = document.getElementById('binder-container');
 const bookSelectorEl = document.getElementById('book-selector');
@@ -55,7 +60,6 @@ const listViewEl = document.getElementById('list-view');
 const binderViewEl = document.getElementById('binder-view');
 const searchInput = document.getElementById('search-input');
 const searchDropdown = document.getElementById('search-dropdown');
-const binderControlsEl = document.getElementById('binder-controls');
 const binderLayoutSelect = document.getElementById('binder-layout-select');
 const binderPageInput = document.getElementById('binder-page-input');
 const binderPageTotal = document.getElementById('binder-page-total');
@@ -81,6 +85,11 @@ const bookUnassignedEl = document.getElementById('book-unassigned');
 const bookAddBtn = document.getElementById('book-add-btn');
 const scrollTopBtn = document.getElementById('scroll-top-btn');
 const statsBar = document.getElementById('stats-bar');
+const collectionTitle = document.getElementById('collection-title');
+const collectionDropdown = document.getElementById('collection-dropdown');
+const viewToggle = document.querySelector('.view-toggle');
+
+// ---- Core rendering ----
 
 function rebuildCollection() {
   collection = buildCollection(state);
@@ -90,47 +99,111 @@ function rebuildCollection() {
 }
 
 function rebuildBookCollection() {
-  const book = state.books[selectedBookIndex] || state.books[0];
-  bookCollection = buildBookCollection(collection, book ? book.generations : [1,2,3,4,5,6,7,8,9]);
+  if (state.type === 'freestyle') {
+    bookCollection = buildBookCollection(collection, {}, 'freestyle');
+  } else {
+    const book = state.books[selectedBookIndex] || state.books[0];
+    bookCollection = buildBookCollection(collection, book, state.type);
+  }
 }
 
 function renderCurrentView() {
-  if (currentView === 'list') {
+  if (currentView === 'list' && state.type === 'pokedex') {
     renderListView(pokemonListEl, collection, state.caught, handleToggleCaught);
   } else {
     renderBinder();
   }
 }
 
+function getLayout() {
+  return state.layout || '3x3';
+}
+
 function renderBinder() {
-  const layout = state.binderLayout;
+  const layout = getLayout();
   const totalViews = getTotalViews(bookCollection.length, layout);
-  binderViewIndex = Math.min(binderViewIndex, totalViews - 1);
-  renderBinderView(binderContainerEl, bookCollection, binderViewIndex, layout, state.caught, handleToggleCaught, state.binderFlow, state.cardSelections, openCardPicker);
+  binderViewIndex = Math.min(binderViewIndex, Math.max(0, totalViews - 1));
+
+  const cardSels = state.type === 'pokedex' ? (state.cardSelections || {}) : {};
+  renderBinderView(
+    binderContainerEl, bookCollection, binderViewIndex, layout,
+    state.caught, handleToggleCaught, state.binderFlow, cardSels,
+    handleSlotClick, state.type
+  );
+
   const totalPages = getTotalPages(bookCollection.length, layout);
   const views = buildViews(totalPages);
   const view = views[Math.min(binderViewIndex, views.length - 1)];
   binderPageInput.value = view.pages[0] + 1;
   binderPageInput.max = totalPages;
   binderPageTotal.textContent = `of ${totalPages}`;
-  const isFirstBook = selectedBookIndex === 0;
-  const isLastBook = selectedBookIndex >= state.books.length - 1;
+
+  const hasBooks = state.type !== 'freestyle';
+  const isFirstBook = !hasBooks || selectedBookIndex === 0;
+  const isLastBook = !hasBooks || selectedBookIndex >= state.books.length - 1;
   binderPrev.disabled = binderViewIndex === 0 && isFirstBook;
   binderNext.disabled = binderViewIndex >= totalViews - 1 && isLastBook;
-  renderBookSelector();
+
+  if (hasBooks) renderBookSelector();
   saveViewState();
 }
 
 function updateStats() {
-  const stats = computeStats(collection, state.caught);
-  renderStats(statsOverallText, statsOverallBar, statsGenEl, stats);
+  if (state.type === 'pokedex') {
+    const stats = computeStats(collection, state.caught);
+    renderStats(statsOverallText, statsOverallBar, statsGenEl, stats);
+  } else {
+    // Simple caught / total for master and freestyle
+    let total, caught;
+    if (state.type === 'freestyle') {
+      const filled = collection.filter(s => !s.isEmpty);
+      total = filled.length;
+      caught = filled.filter(s => state.caught.has(s.formId)).length;
+    } else {
+      total = collection.length;
+      caught = [...state.caught].filter(id => collection.some(s => s.formId === id)).length;
+    }
+    const pct = total > 0 ? ((caught / total) * 100).toFixed(1) : '0.0';
+    statsOverallText.textContent = `${caught} / ${total} (${pct}%)`;
+    statsOverallBar.style.width = `${total > 0 ? (caught / total) * 100 : 0}%`;
+    statsGenEl.innerHTML = '';
+  }
 }
+
+function updateTypeAwareControls() {
+  const isPokedex = state.type === 'pokedex';
+  const isFreestyle = state.type === 'freestyle';
+
+  // Forms button: pokedex only
+  formSettingsBtn.hidden = !isPokedex;
+  // Books button: pokedex and master only
+  bookSettingsBtn.hidden = isFreestyle;
+  // List/Binder toggle: pokedex only
+  viewToggle.hidden = !isPokedex;
+  // Book selector: not for freestyle
+  bookSelectorEl.hidden = isFreestyle;
+
+  // Force binder view for non-pokedex
+  if (!isPokedex && currentView === 'list') {
+    currentView = 'binder';
+    listViewEl.hidden = true;
+    binderViewEl.hidden = false;
+  }
+
+  // Update header title
+  collectionTitle.innerHTML = `${(state.collectionName || 'Collection').toUpperCase()} <span class="chevron">&#9660;</span>`;
+
+  // Update layout selector to match collection
+  binderLayoutSelect.value = getLayout();
+}
+
+// ---- Slot click handlers ----
 
 let lastTouchedFormId = null;
 
-function handleToggleCaught(formId) {
-  if (currentView === 'list') lastTouchedFormId = formId;
-  toggleCaught(state, formId);
+function handleToggleCaught(slotId) {
+  if (currentView === 'list') lastTouchedFormId = slotId;
+  toggleCaught(state, slotId);
   if (currentView === 'list') {
     updateListCaughtState(pokemonListEl, state.caught);
   } else {
@@ -139,9 +212,73 @@ function handleToggleCaught(formId) {
   updateStats();
 }
 
+function handleSlotClick(slotId, name, event) {
+  if (state.type === 'master') {
+    handleToggleCaught(slotId);
+  } else if (state.type === 'freestyle') {
+    const slot = collection.find(s => s.formId === slotId);
+    if (slot && slot.isEmpty) {
+      openCardPicker(slotId, '');
+    } else {
+      openFreestyleMenu(slotId, event);
+    }
+  } else {
+    openCardPicker(slotId, name);
+  }
+}
+
+// ---- Freestyle context menu ----
+
+const freestyleMenu = document.getElementById('freestyle-slot-menu');
+let freestyleMenuSlotId = null;
+
+function openFreestyleMenu(slotId, event) {
+  freestyleMenuSlotId = slotId;
+  const isCaught = state.caught.has(slotId);
+  const toggleItem = freestyleMenu.querySelector('[data-action="toggle-owned"]');
+  toggleItem.textContent = isCaught ? 'Mark as want' : 'Mark owned';
+
+  freestyleMenu.hidden = false;
+  const rect = event && event.target ? event.target.closest('.binder-slot').getBoundingClientRect() : { left: 100, top: 100 };
+  freestyleMenu.style.left = `${Math.min(rect.left, window.innerWidth - 170)}px`;
+  freestyleMenu.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - 120)}px`;
+}
+
+function closeFreestyleMenu() {
+  freestyleMenu.hidden = true;
+  freestyleMenuSlotId = null;
+}
+
+freestyleMenu.addEventListener('click', (e) => {
+  const action = e.target.dataset.action;
+  if (!action || !freestyleMenuSlotId) return;
+  const idx = parseInt(freestyleMenuSlotId, 10);
+
+  if (action === 'toggle-owned') {
+    toggleCaught(state, freestyleMenuSlotId);
+    renderBinder();
+    updateStats();
+  } else if (action === 'change-card') {
+    openCardPicker(freestyleMenuSlotId, '');
+  } else if (action === 'remove') {
+    clearFreestyleSlot(state, idx);
+    rebuildCollection();
+  }
+  closeFreestyleMenu();
+});
+
+document.addEventListener('click', (e) => {
+  if (!freestyleMenu.hidden && !freestyleMenu.contains(e.target)) {
+    closeFreestyleMenu();
+  }
+});
+
+// ---- View switching ----
+
 const viewSlider = document.querySelector('.view-toggle .slider');
 
 function switchView(view) {
+  if (state.type !== 'pokedex' && view === 'list') view = 'binder';
   currentView = view;
   listViewEl.hidden = view !== 'list';
   binderViewEl.hidden = view !== 'binder';
@@ -149,11 +286,10 @@ function switchView(view) {
   viewBinderBtn.classList.toggle('active', view === 'binder');
   viewSlider.classList.toggle('right', view === 'binder');
 
-  // Navigate binder to last touched Pokemon from list view
   if (view === 'binder' && lastTouchedFormId) {
     const idx = bookCollection.findIndex(p => p.formId === lastTouchedFormId);
     if (idx >= 0) {
-      const layout = state.binderLayout;
+      const layout = getLayout();
       const { perPage } = parseLayout(layout);
       const targetPage = Math.floor(idx / perPage);
       const totalPages = getTotalPages(bookCollection.length, layout);
@@ -170,6 +306,386 @@ function switchView(view) {
   renderCurrentView();
   saveViewState();
 }
+
+// ---- Collection switcher dropdown ----
+
+let dropdownOpen = false;
+
+collectionTitle.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  if (dropdownOpen) {
+    closeCollectionDropdown();
+    return;
+  }
+  dropdownOpen = true;
+  collectionTitle.classList.add('open');
+  collectionDropdown.hidden = false;
+  collectionDropdown.innerHTML = '<div style="padding:0.5rem;color:var(--text-muted);font-size:0.75rem;">Loading...</div>';
+
+  const collections = await getAllCollections();
+  collectionDropdown.innerHTML = '';
+  const activeId = getActiveCollectionId();
+
+  for (const c of collections) {
+    const item = document.createElement('div');
+    item.className = 'collection-dd-item' + (c.id === activeId ? ' active' : '');
+    const typeBadge = { pokedex: 'Pokedex', master: 'Master Set', freestyle: 'Freestyle' }[c.type] || c.type;
+    item.innerHTML = `
+      <div class="collection-dd-left">
+        <span class="collection-dd-check">${c.id === activeId ? '&#10003;' : ''}</span>
+        <span>${c.name}</span>
+      </div>
+      <div class="collection-dd-right">
+        <span class="collection-dd-type">${typeBadge}</span>
+        ${collections.length > 1 ? `<button class="collection-dd-delete" data-delete-id="${c.id}" title="Delete">&times;</button>` : ''}
+      </div>
+    `;
+    item.addEventListener('click', async (e) => {
+      if (e.target.closest('.collection-dd-delete')) return;
+      if (c.id !== activeId) {
+        setActiveCollectionId(c.id);
+        state = await loadState();
+        selectedBookIndex = 0;
+        binderViewIndex = 0;
+        updateTypeAwareControls();
+        rebuildCollection();
+        const binderFlowCheck = document.getElementById('binder-flow-check');
+        binderFlowCheck.checked = state.binderFlow === 'row';
+        if (state.type !== 'pokedex') switchView('binder');
+      }
+      closeCollectionDropdown();
+    });
+    collectionDropdown.appendChild(item);
+  }
+
+  // Delete handlers
+  for (const btn of collectionDropdown.querySelectorAll('.collection-dd-delete')) {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.deleteId;
+      if (!confirm(`Delete collection "${collections.find(c => c.id === id)?.name}"?`)) return;
+      await deleteCollection(id);
+      if (id === activeId) {
+        const remaining = collections.filter(c => c.id !== id);
+        if (remaining.length > 0) {
+          setActiveCollectionId(remaining[0].id);
+          state = await loadState();
+          selectedBookIndex = 0;
+          binderViewIndex = 0;
+          updateTypeAwareControls();
+          rebuildCollection();
+        }
+      }
+      closeCollectionDropdown();
+    });
+  }
+
+  // New collection button
+  const addItem = document.createElement('div');
+  addItem.className = 'collection-dd-item collection-dd-add';
+  addItem.innerHTML = '<span>+ New Collection</span>';
+  addItem.addEventListener('click', () => {
+    closeCollectionDropdown();
+    openCreateModal();
+  });
+  collectionDropdown.appendChild(addItem);
+});
+
+function closeCollectionDropdown() {
+  dropdownOpen = false;
+  collectionTitle.classList.remove('open');
+  collectionDropdown.hidden = true;
+}
+
+document.addEventListener('click', (e) => {
+  if (dropdownOpen && !collectionDropdown.contains(e.target) && !collectionTitle.contains(e.target)) {
+    closeCollectionDropdown();
+  }
+});
+
+// ---- Collection creation modal ----
+
+const createModal = document.getElementById('create-collection-modal');
+const createModalClose = document.getElementById('create-modal-close');
+const createNameInput = document.getElementById('create-name');
+const createStep1 = document.getElementById('create-step-1');
+const createStepPokedex = document.getElementById('create-step-pokedex');
+const createStepMaster = document.getElementById('create-step-master');
+const createStepFreestyle = document.getElementById('create-step-freestyle');
+const createBackBtn = document.getElementById('create-back-btn');
+const createCancelBtn = document.getElementById('create-cancel-btn');
+const createConfirmBtn = document.getElementById('create-confirm-btn');
+const createSetSearch = document.getElementById('create-set-search');
+const createSetResults = document.getElementById('create-set-results');
+const createSelectedSets = document.getElementById('create-selected-sets');
+const createPageCount = document.getElementById('create-page-count');
+const createSlotCount = document.getElementById('create-slot-count');
+
+let createType = null;
+let createSelectedLayout = '3x3';
+let createGens = new Set();
+let createSets = []; // [{id, name, year, total, slotList}]
+let createStep = 1;
+let setSearchTimer = null;
+
+const LAYOUTS = ['3x3', '3x4', '4x3', '4x4'];
+const GENERATION_NAMES = {
+  1: 'Gen I', 2: 'Gen II', 3: 'Gen III', 4: 'Gen IV', 5: 'Gen V',
+  6: 'Gen VI', 7: 'Gen VII', 8: 'Gen VIII', 9: 'Gen IX',
+};
+
+function openCreateModal() {
+  createType = null;
+  createSelectedLayout = '3x3';
+  createGens = new Set();
+  createSets = [];
+  createStep = 1;
+  createNameInput.value = '';
+  createConfirmBtn.disabled = true;
+  createBackBtn.hidden = true;
+  showCreateStep(1);
+  for (const card of document.querySelectorAll('.type-card')) card.classList.remove('selected');
+  createModal.hidden = false;
+  createNameInput.focus();
+}
+
+function closeCreateModal() {
+  createModal.hidden = true;
+}
+
+createModalClose.addEventListener('click', closeCreateModal);
+createCancelBtn.addEventListener('click', closeCreateModal);
+createModal.querySelector('.modal-backdrop').addEventListener('click', closeCreateModal);
+
+function showCreateStep(step) {
+  createStep = step;
+  createStep1.hidden = step !== 1;
+  createStepPokedex.hidden = step !== 2 || createType !== 'pokedex';
+  createStepMaster.hidden = step !== 2 || createType !== 'master';
+  createStepFreestyle.hidden = step !== 2 || createType !== 'freestyle';
+  createBackBtn.hidden = step === 1;
+  createConfirmBtn.disabled = !canCreate();
+}
+
+function canCreate() {
+  if (!createNameInput.value.trim()) return false;
+  if (createStep === 1) return false;
+  if (createType === 'pokedex' && createGens.size === 0) return false;
+  if (createType === 'master' && createSets.length === 0) return false;
+  return true;
+}
+
+// Type card selection
+for (const card of document.querySelectorAll('.type-card')) {
+  card.addEventListener('click', () => {
+    createType = card.dataset.type;
+    for (const c of document.querySelectorAll('.type-card')) c.classList.remove('selected');
+    card.classList.add('selected');
+    showCreateStep(2);
+    if (createType === 'pokedex') renderGenGrid();
+    if (createType === 'master') renderMasterConfig();
+    if (createType === 'freestyle') renderFreestyleConfig();
+    renderLayoutPicker(createType);
+  });
+}
+
+createBackBtn.addEventListener('click', () => showCreateStep(1));
+createNameInput.addEventListener('input', () => { createConfirmBtn.disabled = !canCreate(); });
+
+// Gen grid
+function renderGenGrid() {
+  const grid = document.getElementById('create-gen-grid');
+  grid.innerHTML = '';
+  for (let g = 1; g <= 9; g++) {
+    const el = document.createElement('div');
+    el.className = 'gen-check' + (createGens.has(g) ? ' checked' : '');
+    el.innerHTML = `<div class="gen-check-box">${createGens.has(g) ? '&#10003;' : ''}</div> ${GENERATION_NAMES[g]}`;
+    el.addEventListener('click', () => {
+      if (createGens.has(g)) createGens.delete(g); else createGens.add(g);
+      renderGenGrid();
+      createConfirmBtn.disabled = !canCreate();
+    });
+    grid.appendChild(el);
+  }
+}
+
+// Layout picker
+function renderLayoutPicker(type) {
+  const containerId = `create-layout-${type}`;
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  for (const layout of LAYOUTS) {
+    const [cols, rows] = layout.split('x').map(Number);
+    const opt = document.createElement('div');
+    opt.className = 'layout-option' + (createSelectedLayout === layout ? ' selected' : '');
+    let cells = '';
+    for (let i = 0; i < cols * rows; i++) cells += '<span></span>';
+    opt.innerHTML = `<div class="layout-preview" style="display:grid;grid-template-columns:repeat(${cols},8px);gap:1px;">${cells}</div><div class="layout-label">${cols}&times;${rows}</div>`;
+    opt.querySelector('.layout-preview').querySelectorAll('span').forEach(s => {
+      s.style.cssText = 'background:currentColor;width:8px;height:10px;border-radius:1px;opacity:0.5;';
+    });
+    opt.addEventListener('click', () => {
+      createSelectedLayout = layout;
+      renderLayoutPicker(type);
+      if (type === 'freestyle') updateFreestyleSlotCount();
+    });
+    container.appendChild(opt);
+  }
+}
+
+// Master set config
+function renderMasterConfig() {
+  createSetSearch.value = '';
+  createSetResults.hidden = true;
+  renderSelectedSets();
+}
+
+let setSearchAbort = null;
+createSetSearch.addEventListener('input', () => {
+  clearTimeout(setSearchTimer);
+  setSearchTimer = setTimeout(async () => {
+    const q = createSetSearch.value.trim();
+    if (!q) { createSetResults.hidden = true; return; }
+    if (setSearchAbort) setSearchAbort.abort();
+    createSetResults.innerHTML = '<div style="padding:0.5rem;color:var(--text-muted);font-size:0.7rem;">Searching...</div>';
+    createSetResults.hidden = false;
+    const result = await fetchSets(q);
+    if (result.error) {
+      createSetResults.innerHTML = `<div style="padding:0.5rem;color:var(--accent);font-size:0.7rem;">${result.error}</div>`;
+      return;
+    }
+    if (result.sets.length === 0) {
+      createSetResults.innerHTML = '<div style="padding:0.5rem;color:var(--text-muted);font-size:0.7rem;">No sets found</div>';
+      return;
+    }
+    createSetResults.innerHTML = '';
+    const addedIds = new Set(createSets.map(s => s.id));
+    for (const s of result.sets) {
+      if (addedIds.has(s.id)) continue;
+      const el = document.createElement('div');
+      el.className = 'set-result';
+      el.innerHTML = `
+        <div class="set-result-info">
+          <span>${s.name}</span>
+          <span class="set-result-meta">${s.year} &middot; ${s.total} cards</span>
+        </div>
+        <button class="btn btn-add">Add</button>
+      `;
+      el.querySelector('.btn-add').addEventListener('click', async (e) => {
+        const btn = e.target;
+        btn.textContent = '...';
+        btn.disabled = true;
+        const cardResult = await fetchSetCards(s.id);
+        const slotList = expandVariants(cardResult.cards);
+        createSets.push({ id: s.id, name: s.name, year: s.year, total: s.total, slotCount: slotList.length, slotList });
+        renderSelectedSets();
+        createConfirmBtn.disabled = !canCreate();
+        // Remove from results
+        el.remove();
+      });
+      createSetResults.appendChild(el);
+    }
+  }, 300);
+});
+
+function renderSelectedSets() {
+  createSelectedSets.innerHTML = '';
+  if (createSets.length === 0) {
+    createSelectedSets.innerHTML = '<div style="color:var(--text-muted);font-size:0.7rem;">No sets added yet</div>';
+    return;
+  }
+  for (let i = 0; i < createSets.length; i++) {
+    const s = createSets[i];
+    const el = document.createElement('div');
+    el.className = 'selected-set';
+    el.innerHTML = `
+      <div>
+        <div>${s.name}</div>
+        <div class="selected-set-slots">${s.total} cards &middot; ${s.slotCount} variant slots</div>
+      </div>
+      <button class="btn-remove">&times;</button>
+    `;
+    el.querySelector('.btn-remove').addEventListener('click', () => {
+      createSets.splice(i, 1);
+      renderSelectedSets();
+      createConfirmBtn.disabled = !canCreate();
+    });
+    createSelectedSets.appendChild(el);
+  }
+}
+
+// Freestyle config
+function renderFreestyleConfig() {
+  updateFreestyleSlotCount();
+}
+
+createPageCount.addEventListener('input', updateFreestyleSlotCount);
+
+function updateFreestyleSlotCount() {
+  const [cols, rows] = createSelectedLayout.split('x').map(Number);
+  const pages = parseInt(createPageCount.value, 10) || 1;
+  createSlotCount.textContent = `= ${pages * cols * rows} slots`;
+}
+
+// Create button
+createConfirmBtn.addEventListener('click', async () => {
+  if (!canCreate()) return;
+  createConfirmBtn.disabled = true;
+  createConfirmBtn.textContent = 'Creating...';
+
+  const name = createNameInput.value.trim();
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
+
+  const record = {
+    id,
+    name,
+    type: createType,
+    layout: createSelectedLayout,
+    caught: [],
+    books: [],
+  };
+
+  if (createType === 'pokedex') {
+    const gens = [...createGens].sort((a, b) => a - b);
+    record.generations = gens;
+    record.cardSelections = {};
+    record.disabledCategories = [];
+    record.excludedForms = [];
+    record.books = [{ generations: gens }];
+  } else if (createType === 'master') {
+    record.sets = createSets.map(s => s.id);
+    // Merge all slot lists
+    const allSlots = [];
+    for (const s of createSets) {
+      allSlots.push(...s.slotList);
+    }
+    record.slotList = allSlots;
+    record.books = createSets.map(s => ({ sets: [s.id], name: s.name }));
+  } else if (createType === 'freestyle') {
+    const [cols, rows] = createSelectedLayout.split('x').map(Number);
+    const pages = parseInt(createPageCount.value, 10) || 1;
+    record.pageCount = pages;
+    record.slots = new Array(pages * cols * rows).fill(null);
+    record.books = [];
+  }
+
+  await saveCollection(record);
+  setActiveCollectionId(id);
+  state = await loadState();
+  selectedBookIndex = 0;
+  binderViewIndex = 0;
+  updateTypeAwareControls();
+  rebuildCollection();
+  if (state.type !== 'pokedex') switchView('binder');
+  else switchView(currentView);
+
+  createConfirmBtn.textContent = 'Create';
+  createConfirmBtn.disabled = false;
+  closeCreateModal();
+});
+
+// ---- Form settings (pokedex only) ----
 
 const MAIN_CAT_ICONS = { regional: '🌍', mega: '💎', gmax: '⚡' };
 
@@ -191,13 +707,11 @@ function buildAccordionGroup(key, label, icon, forms, isCategory) {
     </div>
   `;
 
-  // Accordion toggle on header click
   header.addEventListener('click', (e) => {
     if (e.target.closest('.toggle-switch')) return;
     group.classList.toggle('open');
   });
 
-  // Category toggle switch
   header.querySelector('.toggle-switch').addEventListener('click', (e) => {
     e.stopPropagation();
     toggleCategory(state, key);
@@ -236,7 +750,6 @@ function buildAccordionGroup(key, label, icon, forms, isCategory) {
 function renderFormSettings() {
   formSettingsBodyEl.innerHTML = '';
 
-  // Toggle all buttons
   const toggleAllRow = document.createElement('div');
   toggleAllRow.style.cssText = 'display:flex;gap:0.4rem;margin-bottom:0.75rem;';
   const disableAllBtn = document.createElement('button');
@@ -247,10 +760,9 @@ function renderFormSettings() {
     const subCats = getFormSubCategories();
     for (const cat of allCats) state.disabledCategories.add(cat);
     for (const [subKey] of subCats) state.disabledCategories.add(subKey);
-    // Exclude individual misc forms
     const miscForms = getOtherFormsWithoutSubCategory();
     for (const f of miscForms) state.excludedForms.add(f.formId);
-    saveState(state); // fire-and-forget async
+    saveState(state);
     rebuildCollection();
     renderFormSettings();
   });
@@ -260,7 +772,7 @@ function renderFormSettings() {
   enableAllBtn.addEventListener('click', () => {
     state.disabledCategories.clear();
     state.excludedForms.clear();
-    saveState(state); // fire-and-forget async
+    saveState(state);
     rebuildCollection();
     renderFormSettings();
   });
@@ -268,7 +780,6 @@ function renderFormSettings() {
   toggleAllRow.appendChild(enableAllBtn);
   formSettingsBodyEl.appendChild(toggleAllRow);
 
-  // Main categories: regional, mega, gmax
   const mainCats = ['regional', 'mega', 'gmax'];
   for (const cat of mainCats) {
     const forms = getAlternateFormsByCategory(cat);
@@ -278,13 +789,11 @@ function renderFormSettings() {
     formSettingsBodyEl.appendChild(buildAccordionGroup(cat, label, icon, forms, true));
   }
 
-  // Section divider
   const divider = document.createElement('div');
   divider.className = 'section-divider';
   divider.textContent = 'Other Form Groups';
   formSettingsBodyEl.appendChild(divider);
 
-  // Sub-category groups (species-specific)
   const subCats = getFormSubCategories();
   const sortedSubs = [...subCats.entries()].sort((a, b) => a[1][0].id - b[1][0].id);
   for (const [subKey, forms] of sortedSubs) {
@@ -294,7 +803,6 @@ function renderFormSettings() {
     formSettingsBodyEl.appendChild(buildAccordionGroup(subKey, label, icon, forms, false));
   }
 
-  // Other misc (no sub-category) — individual toggles
   const miscForms = getOtherFormsWithoutSubCategory();
   if (miscForms.length > 0) {
     const miscDivider = document.createElement('div');
@@ -324,18 +832,20 @@ function renderFormSettings() {
   }
 }
 
-// --- Book selector (dropdown) ---
+// ---- Book selector ----
+
 function renderBookSelector() {
   bookSelectorEl.innerHTML = '';
+  if (state.type === 'freestyle') return;
   for (let i = 0; i < state.books.length; i++) {
     const opt = document.createElement('option');
     opt.value = i;
-    const sz = bookCollection.length; // current book size shown in binder
-    opt.textContent = `Book ${i + 1}`;
+    opt.textContent = state.books[i].name || `Book ${i + 1}`;
     bookSelectorEl.appendChild(opt);
   }
   bookSelectorEl.value = selectedBookIndex;
 }
+
 bookSelectorEl.addEventListener('change', () => {
   selectedBookIndex = parseInt(bookSelectorEl.value, 10);
   binderViewIndex = 0;
@@ -343,38 +853,52 @@ bookSelectorEl.addEventListener('change', () => {
   renderBinder();
 });
 
-// --- Book settings modal (column cards + drag-and-drop) ---
-const GENERATION_NAMES = {
-  1: 'Gen I', 2: 'Gen II', 3: 'Gen III', 4: 'Gen IV', 5: 'Gen V',
-  6: 'Gen VI', 7: 'Gen VII', 8: 'Gen VIII', 9: 'Gen IX',
-};
+// ---- Book settings modal ----
 
-function getAssignedGens() {
+function getAssignedSources() {
   const assigned = new Set();
   for (const book of state.books) {
-    for (const g of book.generations) assigned.add(g);
+    const sources = state.type === 'master' ? (book.sets || []) : (book.generations || []);
+    for (const s of sources) assigned.add(s);
   }
   return assigned;
 }
 
-function bookGenCount(gens) {
-  // Count from the active collection
-  return collection.filter(p => gens.includes(p.generation)).length;
+function getAllSources() {
+  if (state.type === 'master') return state.sets || [];
+  return state.generations || [1,2,3,4,5,6,7,8,9];
 }
 
-function makeGenChip(g, onRemove) {
+function sourceLabel(source) {
+  if (state.type === 'master') {
+    // Find set name from slotList
+    const slot = (state.slotList || []).find(s => s.setId === source);
+    return slot ? slot.setName : source;
+  }
+  return GENERATION_NAMES[source] || `Gen ${source}`;
+}
+
+function bookSourceCount(sources) {
+  if (state.type === 'master') {
+    const setIds = new Set(sources);
+    return collection.filter(p => setIds.has(p.setId)).length;
+  }
+  return collection.filter(p => sources.includes(p.generation)).length;
+}
+
+function makeSourceChip(source, onRemove) {
   const chip = document.createElement('div');
   chip.className = 'gen-chip';
   chip.draggable = true;
-  chip.dataset.gen = g;
-  chip.innerHTML = `${GENERATION_NAMES[g]} <span class="gen-chip-remove">\u2715</span>`;
+  chip.dataset.gen = source;
+  chip.innerHTML = `${sourceLabel(source)} <span class="gen-chip-remove">\u2715</span>`;
   chip.addEventListener('dragstart', (e) => {
-    e.dataTransfer.setData('text/plain', String(g));
+    e.dataTransfer.setData('text/plain', String(source));
     chip.classList.add('dragging');
   });
   chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
   if (onRemove) {
-    chip.querySelector('.gen-chip-remove').addEventListener('click', () => onRemove(g));
+    chip.querySelector('.gen-chip-remove').addEventListener('click', () => onRemove(source));
   }
   return chip;
 }
@@ -385,37 +909,40 @@ function setupDropZone(el, onDrop) {
   el.addEventListener('drop', (e) => {
     e.preventDefault();
     el.classList.remove('drag-over');
-    const g = parseInt(e.dataTransfer.getData('text/plain'), 10);
-    if (g) onDrop(g);
+    const raw = e.dataTransfer.getData('text/plain');
+    const val = state.type === 'master' ? raw : parseInt(raw, 10);
+    if (val) onDrop(val);
   });
+}
+
+function getBookSourceKey() {
+  return state.type === 'master' ? 'sets' : 'generations';
 }
 
 function renderBookSettings() {
   bookSettingsBodyEl.innerHTML = '';
-  const assigned = getAssignedGens();
-  const unassigned = [];
-  for (let g = 1; g <= 9; g++) {
-    if (!assigned.has(g)) unassigned.push(g);
-  }
 
-  // Unassigned pool
+  if (state.type === 'freestyle') return;
+
+  const key = getBookSourceKey();
+  const allSources = getAllSources();
+  const assigned = getAssignedSources();
+  const unassigned = allSources.filter(s => !assigned.has(s));
+
   const pool = document.createElement('div');
   pool.className = 'book-pool';
   if (unassigned.length > 0) {
     pool.innerHTML = '<div class="book-pool-label">Unassigned — drag into a book</div>';
-    const gensEl = document.createElement('div');
-    gensEl.className = 'book-pool-gens';
-    for (const g of unassigned) {
-      gensEl.appendChild(makeGenChip(g, null));
-    }
-    pool.appendChild(gensEl);
+    const chipsEl = document.createElement('div');
+    chipsEl.className = 'book-pool-gens';
+    for (const s of unassigned) chipsEl.appendChild(makeSourceChip(s, null));
+    pool.appendChild(chipsEl);
   } else {
-    pool.innerHTML = '<div class="book-pool-label">All generations assigned</div>';
+    pool.innerHTML = '<div class="book-pool-label">All sources assigned</div>';
   }
-  setupDropZone(pool, (g) => {
-    // Remove from all books
+  setupDropZone(pool, (source) => {
     for (const book of state.books) {
-      book.generations = book.generations.filter(x => x !== g);
+      book[key] = (book[key] || []).filter(x => x !== source);
     }
     saveBooks(state, state.books);
     rebuildBookCollection();
@@ -423,44 +950,44 @@ function renderBookSettings() {
   });
   bookSettingsBodyEl.appendChild(pool);
 
-  // Book columns
   const grid = document.createElement('div');
   grid.className = 'books-grid';
   for (let bi = 0; bi < state.books.length; bi++) {
     const book = state.books[bi];
+    const sources = book[key] || [];
     const col = document.createElement('div');
     col.className = 'book-col';
 
     const header = document.createElement('div');
     header.className = 'book-col-header';
-    header.innerHTML = `<span class="book-col-label">Book ${bi + 1}</span><span class="book-col-size">${bookGenCount(book.generations)} cards</span>`;
+    header.innerHTML = `<span class="book-col-label">${book.name || `Book ${bi + 1}`}</span><span class="book-col-size">${bookSourceCount(sources)} slots</span>`;
     col.appendChild(header);
 
     const body = document.createElement('div');
     body.className = 'book-col-body';
-    for (const g of book.generations) {
-      body.appendChild(makeGenChip(g, (gen) => {
-        state.books[bi].generations = state.books[bi].generations.filter(x => x !== gen);
+    for (const s of sources) {
+      body.appendChild(makeSourceChip(s, (src) => {
+        state.books[bi][key] = (state.books[bi][key] || []).filter(x => x !== src);
         saveBooks(state, state.books);
         rebuildBookCollection();
         renderBookSettings();
       }));
     }
-    if (book.generations.length === 0) {
+    if (sources.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'book-pool-empty';
-      empty.textContent = 'Drag gens here';
+      empty.textContent = 'Drag here';
       body.appendChild(empty);
     }
     col.appendChild(body);
 
-    setupDropZone(col, (g) => {
-      // Remove from all books and pool
+    setupDropZone(col, (source) => {
       for (const b of state.books) {
-        b.generations = b.generations.filter(x => x !== g);
+        b[key] = (b[key] || []).filter(x => x !== source);
       }
-      state.books[bi].generations.push(g);
-      state.books[bi].generations.sort((a, b) => a - b);
+      if (!state.books[bi][key]) state.books[bi][key] = [];
+      state.books[bi][key].push(source);
+      if (state.type !== 'master') state.books[bi][key].sort((a, b) => a - b);
       saveBooks(state, state.books);
       rebuildBookCollection();
       renderBookSettings();
@@ -470,19 +997,22 @@ function renderBookSettings() {
   }
   bookSettingsBodyEl.appendChild(grid);
 
-  // Unassigned warning
   if (unassigned.length > 0) {
-    bookUnassignedEl.textContent = 'Unassigned: ' + unassigned.map(g => GENERATION_NAMES[g]).join(', ');
+    bookUnassignedEl.textContent = 'Unassigned: ' + unassigned.map(s => sourceLabel(s)).join(', ');
   } else {
     bookUnassignedEl.textContent = '';
   }
 }
 
 bookAddBtn.addEventListener('click', () => {
-  state.books.push({ generations: [] });
+  const key = getBookSourceKey();
+  const newBook = { name: '' };
+  newBook[key] = [];
+  state.books.push(newBook);
   saveBooks(state, state.books);
   renderBookSettings();
 });
+
 document.getElementById('book-remove-btn').addEventListener('click', () => {
   if (state.books.length <= 1) return;
   state.books.pop();
@@ -494,9 +1024,11 @@ document.getElementById('book-remove-btn').addEventListener('click', () => {
 });
 
 bookSettingsBtn.addEventListener('click', () => {
+  if (state.type === 'freestyle') return;
   bookSettingsModal.hidden = false;
   renderBookSettings();
 });
+
 function closeBookSettings() {
   bookSettingsModal.hidden = true;
   rebuildBookCollection();
@@ -505,7 +1037,8 @@ function closeBookSettings() {
 bookModalCloseBtn.addEventListener('click', closeBookSettings);
 bookSettingsModal.querySelector('.modal-backdrop').addEventListener('click', closeBookSettings);
 
-// --- Autocomplete search ---
+// ---- Autocomplete search ----
+
 let searchTimer;
 let activeIndex = -1;
 
@@ -514,7 +1047,8 @@ function searchMatches(query) {
   const results = [];
   for (const p of collection) {
     if (results.length >= 10) break;
-    const nameMatch = p.name.toLowerCase().includes(q);
+    if (p.isEmpty) continue;
+    const nameMatch = p.name && p.name.toLowerCase().includes(q);
     const formMatch = p.formName && p.formName.toLowerCase().includes(q);
     const numMatch = String(p.id).startsWith(q);
     if (nameMatch || formMatch || numMatch) results.push(p);
@@ -522,7 +1056,7 @@ function searchMatches(query) {
   return results;
 }
 
-function renderDropdown(results) {
+function renderSearchDropdown(results) {
   searchDropdown.innerHTML = '';
   if (results.length === 0) {
     searchDropdown.hidden = true;
@@ -534,33 +1068,33 @@ function renderDropdown(results) {
     const item = document.createElement('div');
     item.className = 'dropdown-item' + (isCaught ? ' caught' : '') + (i === activeIndex ? ' active' : '');
     item.dataset.index = i;
-    let text = `#${p.collectionNum} · Dex ${p.id} ${p.name}`;
+    let text = `#${p.collectionNum} ${p.name || ''}`;
     if (p.formName) text += ` (${p.formName})`;
     if (isCaught) text = '\u2713 ' + text;
     item.textContent = text;
     item.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      selectResult(p);
+      selectSearchResult(p);
     });
     searchDropdown.appendChild(item);
   }
   searchDropdown.hidden = false;
 }
 
-function dismissDropdown() {
+function dismissSearchDropdown() {
   searchDropdown.hidden = true;
   searchDropdown.innerHTML = '';
   activeIndex = -1;
 }
 
-function selectResult(pokemon) {
+function selectSearchResult(pokemon) {
   searchInput.value = '';
-  dismissDropdown();
+  dismissSearchDropdown();
   navigateTo(pokemon);
 }
 
 function navigateTo(pokemon) {
-  if (currentView === 'list') {
+  if (currentView === 'list' && state.type === 'pokedex') {
     const row = pokemonListEl.querySelector(`[data-form-id="${pokemon.formId}"]`);
     if (row) {
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -574,23 +1108,18 @@ function navigateTo(pokemon) {
       observer.observe(row);
     }
   } else {
-    // Find which book contains this Pokemon
     let idx = bookCollection.findIndex(p => p.formId === pokemon.formId);
-    if (idx === -1) {
-      // Pokemon not in current book — search all books
+    if (idx === -1 && state.type !== 'freestyle') {
       for (let bi = 0; bi < state.books.length; bi++) {
-        const book = state.books[bi];
-        const genSet = new Set(book.generations);
-        if (genSet.has(pokemon.generation)) {
-          selectedBookIndex = bi;
-          rebuildBookCollection();
-          idx = bookCollection.findIndex(p => p.formId === pokemon.formId);
-          break;
-        }
+        selectedBookIndex = bi;
+        rebuildBookCollection();
+        idx = bookCollection.findIndex(p => p.formId === pokemon.formId);
+        if (idx >= 0) break;
       }
       if (idx === -1) return;
     }
-    const layout = state.binderLayout;
+    if (idx === -1) return;
+    const layout = getLayout();
     const { perPage } = parseLayout(layout);
     const pageIndex = Math.floor(idx / perPage);
     const totalPages = getTotalPages(bookCollection.length, layout);
@@ -615,12 +1144,9 @@ searchInput.addEventListener('input', () => {
   searchTimer = setTimeout(() => {
     const query = searchInput.value.trim();
     activeIndex = -1;
-    if (!query) {
-      dismissDropdown();
-      return;
-    }
+    if (!query) { dismissSearchDropdown(); return; }
     const results = searchMatches(query);
-    renderDropdown(results);
+    renderSearchDropdown(results);
   }, 150);
 });
 
@@ -628,7 +1154,6 @@ searchInput.addEventListener('keydown', (e) => {
   if (searchDropdown.hidden) return;
   const items = searchDropdown.querySelectorAll('.dropdown-item');
   if (items.length === 0) return;
-
   if (e.key === 'ArrowDown') {
     e.preventDefault();
     activeIndex = (activeIndex + 1) % items.length;
@@ -640,41 +1165,31 @@ searchInput.addEventListener('keydown', (e) => {
   } else if (e.key === 'Enter') {
     e.preventDefault();
     if (activeIndex >= 0 && activeIndex < items.length) {
-      const query = searchInput.value.trim();
-      const results = searchMatches(query);
-      selectResult(results[activeIndex]);
+      const results = searchMatches(searchInput.value.trim());
+      selectSearchResult(results[activeIndex]);
     }
   } else if (e.key === 'Escape') {
     e.preventDefault();
     searchInput.value = '';
-    dismissDropdown();
+    dismissSearchDropdown();
   }
 });
 
 function updateActiveItem(items) {
-  for (let i = 0; i < items.length; i++) {
-    items[i].classList.toggle('active', i === activeIndex);
-  }
-  if (activeIndex >= 0 && items[activeIndex]) {
-    items[activeIndex].scrollIntoView({ block: 'nearest' });
-  }
+  for (let i = 0; i < items.length; i++) items[i].classList.toggle('active', i === activeIndex);
+  if (activeIndex >= 0 && items[activeIndex]) items[activeIndex].scrollIntoView({ block: 'nearest' });
 }
 
 document.addEventListener('click', (e) => {
-  if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
-    dismissDropdown();
-  }
+  if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) dismissSearchDropdown();
 });
 
-// Scroll to top
-window.addEventListener('scroll', () => {
-  scrollTopBtn.hidden = window.scrollY < 300;
-});
-scrollTopBtn.addEventListener('click', () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-});
+// ---- Scroll to top ----
+window.addEventListener('scroll', () => { scrollTopBtn.hidden = window.scrollY < 300; });
+scrollTopBtn.addEventListener('click', () => { window.scrollTo({ top: 0, behavior: 'smooth' }); });
 
 // ---- Card Picker ----
+
 const cardPickerModal = document.getElementById('card-picker-modal');
 const cardPickerName = document.getElementById('card-picker-name');
 const cardPickerFilter = document.getElementById('card-picker-filter');
@@ -691,21 +1206,24 @@ let pickerCards = [];
 let pickerSelectedCard = null;
 let pickerFilterTimer;
 let pickerPreviousFocus = null;
+let pickerCurrentName = null;
 
 async function openCardPicker(formId, pokemonName) {
   pickerPreviousFocus = document.activeElement;
   pickerFormId = formId;
   pickerCurrentName = pokemonName;
-  const existingCard = state.cardSelections[formId];
-  const isCaught = state.caught.has(formId);
-  if (existingCard) {
-    pickerSelectedCard = existingCard;
-  } else if (isCaught) {
-    pickerSelectedCard = EMPTY_CARD;
+
+  if (state.type === 'pokedex') {
+    const existingCard = state.cardSelections[formId];
+    const isCaught = state.caught.has(formId);
+    if (existingCard) pickerSelectedCard = existingCard;
+    else if (isCaught) pickerSelectedCard = EMPTY_CARD;
+    else pickerSelectedCard = null;
   } else {
     pickerSelectedCard = null;
   }
-  cardPickerName.textContent = pokemonName;
+
+  cardPickerName.textContent = pokemonName || 'Select a card';
   cardPickerFilter.value = '';
   cardPickerModal.hidden = false;
 
@@ -713,11 +1231,11 @@ async function openCardPicker(formId, pokemonName) {
   cardPickerCount.textContent = '';
   updatePickerFooter();
 
-  const result = await fetchCardsForPokemon(pokemonName);
+  const result = await fetchCardsForPokemon(pokemonName || '');
   pickerCards = result.cards;
 
   if (result.error && pickerCards.length === 0) {
-    cardPickerGrid.innerHTML = `<div class="card-picker-error">Failed to load cards: ${result.error}<br><button class="btn card-picker-retry" onclick="this.closest('.card-picker-error').innerHTML='Retrying...'">Retry</button></div>`;
+    cardPickerGrid.innerHTML = `<div class="card-picker-error">Failed to load cards: ${result.error}</div>`;
     return;
   }
 
@@ -728,53 +1246,38 @@ async function openCardPicker(formId, pokemonName) {
   });
 }
 
-let pickerCurrentName = null;
-
-cardPickerRefresh.addEventListener('click', async () => {
-  if (!pickerCurrentName) return;
-  cardPickerRefresh.disabled = true;
-  cardPickerRefresh.textContent = '...';
-  const result = await fetchCardsForPokemon(pickerCurrentName, { skipCache: true });
-  cardPickerRefresh.disabled = false;
-  cardPickerRefresh.textContent = '\u21BB';
-  if (result.error && result.cards.length === 0) {
-    cardPickerCount.textContent = 'Refresh failed';
-    return;
-  }
-  pickerCards = result.cards;
-  renderPickerCards(pickerCards);
-});
-
 const EMPTY_CARD = { cardId: '__empty__', name: '', number: '', setName: '', setYear: '', rarity: '', imageSmall: '' };
 
 function renderPickerCards(cards) {
   cardPickerGrid.innerHTML = '';
   cardPickerCount.textContent = `${cards.length} cards`;
 
-  // "No card" option — marks as caught without a specific card image
-  const emptyItem = document.createElement('div');
-  const isEmptySelected = pickerSelectedCard && pickerSelectedCard.cardId === '__empty__';
-  emptyItem.className = 'card-picker-item card-picker-empty' + (isEmptySelected ? ' selected' : '');
-  emptyItem.tabIndex = 0;
-  emptyItem.innerHTML = `
-    <div class="card-picker-empty-art">&#10003;</div>
-    <div class="card-picker-item-info">
-      <div><span class="card-picker-item-number">Caught</span></div>
-      <div class="card-picker-item-set">No specific card</div>
-    </div>
-  `;
-  emptyItem.addEventListener('click', () => {
-    if (pickerSelectedCard && pickerSelectedCard.cardId === '__empty__') {
-      pickerSelectedCard = null;
-      emptyItem.classList.remove('selected');
-    } else {
-      pickerSelectedCard = EMPTY_CARD;
-      for (const el of cardPickerGrid.querySelectorAll('.card-picker-item')) el.classList.remove('selected');
-      emptyItem.classList.add('selected');
-    }
-    updatePickerFooter();
-  });
-  cardPickerGrid.appendChild(emptyItem);
+  // "No card" option for pokedex
+  if (state.type === 'pokedex') {
+    const emptyItem = document.createElement('div');
+    const isEmptySelected = pickerSelectedCard && pickerSelectedCard.cardId === '__empty__';
+    emptyItem.className = 'card-picker-item card-picker-empty' + (isEmptySelected ? ' selected' : '');
+    emptyItem.tabIndex = 0;
+    emptyItem.innerHTML = `
+      <div class="card-picker-empty-art">&#10003;</div>
+      <div class="card-picker-item-info">
+        <div><span class="card-picker-item-number">Caught</span></div>
+        <div class="card-picker-item-set">No specific card</div>
+      </div>
+    `;
+    emptyItem.addEventListener('click', () => {
+      if (pickerSelectedCard && pickerSelectedCard.cardId === '__empty__') {
+        pickerSelectedCard = null;
+        emptyItem.classList.remove('selected');
+      } else {
+        pickerSelectedCard = EMPTY_CARD;
+        for (const el of cardPickerGrid.querySelectorAll('.card-picker-item')) el.classList.remove('selected');
+        emptyItem.classList.add('selected');
+      }
+      updatePickerFooter();
+    });
+    cardPickerGrid.appendChild(emptyItem);
+  }
 
   for (const card of cards) {
     const item = document.createElement('div');
@@ -826,9 +1329,8 @@ function restorePickerFocus() {
   const formId = el ? el.dataset.formId : null;
   pickerPreviousFocus = null;
   requestAnimationFrame(() => {
-    if (el && el.isConnected) {
-      el.focus();
-    } else if (formId) {
+    if (el && el.isConnected) el.focus();
+    else if (formId) {
       const newEl = binderContainerEl.querySelector(`[data-form-id="${formId}"]`);
       if (newEl) newEl.focus();
     }
@@ -837,6 +1339,7 @@ function restorePickerFocus() {
 
 cardPickerClose.addEventListener('click', () => { closeCardPicker(); restorePickerFocus(); });
 cardPickerModal.querySelector('.modal-backdrop').addEventListener('click', () => { closeCardPicker(); restorePickerFocus(); });
+
 document.addEventListener('keydown', (e) => {
   if (cardPickerModal.hidden) return;
   if (e.key === 'Escape') {
@@ -844,7 +1347,6 @@ document.addEventListener('keydown', (e) => {
     closeCardPicker();
     restorePickerFocus();
   } else if (e.key === 'Enter') {
-    // Skip if a card item is focused — the grid handler handles select+save
     const focused = document.activeElement;
     if (focused && focused.classList.contains('card-picker-item')) return;
     e.preventDefault();
@@ -853,32 +1355,38 @@ document.addEventListener('keydown', (e) => {
 });
 
 cardPickerSave.addEventListener('click', () => {
-  if (pickerFormId) {
+  if (!pickerFormId) { closeCardPicker(); return; }
+
+  if (state.type === 'freestyle') {
+    const idx = parseInt(pickerFormId, 10);
+    if (pickerSelectedCard && pickerSelectedCard.cardId !== '__empty__') {
+      setFreestyleSlot(state, idx, pickerSelectedCard);
+      rebuildCollection();
+    }
+  } else if (state.type === 'pokedex') {
     if (pickerSelectedCard) {
       if (pickerSelectedCard.cardId === '__empty__') {
         clearCardSelection(state, pickerFormId);
-        // Auto-mark as caught
         if (!state.caught.has(pickerFormId)) {
           state.caught.add(pickerFormId);
-          saveState(state); // fire-and-forget async
+          saveState(state);
         }
       } else {
         setCardSelection(state, pickerFormId, pickerSelectedCard);
-        // Auto-mark as caught — setCardSelection already saves, but caught may also need saving
         if (!state.caught.has(pickerFormId)) {
           state.caught.add(pickerFormId);
-          saveState(state); // fire-and-forget async
+          saveState(state);
         }
       }
     } else {
-      // Deselected — uncaught, clear card
       clearCardSelection(state, pickerFormId);
       if (state.caught.has(pickerFormId)) {
         state.caught.delete(pickerFormId);
-        saveState(state); // fire-and-forget async
+        saveState(state);
       }
     }
   }
+
   closeCardPicker();
   renderBinder();
   updateStats();
@@ -887,10 +1395,15 @@ cardPickerSave.addEventListener('click', () => {
 
 cardPickerClear.addEventListener('click', () => {
   if (pickerFormId) {
-    clearCardSelection(state, pickerFormId);
-    if (state.caught.has(pickerFormId)) {
-      state.caught.delete(pickerFormId);
-      saveState(state); // fire-and-forget async
+    if (state.type === 'freestyle') {
+      clearFreestyleSlot(state, parseInt(pickerFormId, 10));
+      rebuildCollection();
+    } else {
+      clearCardSelection(state, pickerFormId);
+      if (state.caught.has(pickerFormId)) {
+        state.caught.delete(pickerFormId);
+        saveState(state);
+      }
     }
   }
   closeCardPicker();
@@ -899,118 +1412,86 @@ cardPickerClear.addEventListener('click', () => {
   restorePickerFocus();
 });
 
+cardPickerRefresh.addEventListener('click', async () => {
+  if (!pickerCurrentName) return;
+  cardPickerRefresh.disabled = true;
+  cardPickerRefresh.textContent = '...';
+  const result = await fetchCardsForPokemon(pickerCurrentName, { skipCache: true });
+  cardPickerRefresh.disabled = false;
+  cardPickerRefresh.textContent = '\u21BB';
+  if (result.error && result.cards.length === 0) {
+    cardPickerCount.textContent = 'Refresh failed';
+    return;
+  }
+  pickerCards = result.cards;
+  renderPickerCards(pickerCards);
+});
+
 cardPickerGrid.addEventListener('keydown', (e) => {
   const items = cardPickerGrid.querySelectorAll('.card-picker-item');
   if (items.length === 0) return;
   const focused = document.activeElement;
   if (!focused || !focused.classList.contains('card-picker-item')) return;
-
   const idx = Array.prototype.indexOf.call(items, focused);
   if (idx === -1) return;
-
   const cols = getComputedStyle(cardPickerGrid).gridTemplateColumns.split(' ').length;
 
-  if (e.key === 'ArrowRight') {
-    e.preventDefault();
-    if (idx + 1 < items.length) items[idx + 1].focus();
-  } else if (e.key === 'ArrowLeft') {
-    e.preventDefault();
-    if (idx - 1 >= 0) items[idx - 1].focus();
-  } else if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    const next = idx + cols;
-    if (next < items.length) items[next].focus();
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    const prev = idx - cols;
-    if (prev >= 0) items[prev].focus();
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    focused.click(); // select the focused card
-    cardPickerSave.click();
-  }
+  if (e.key === 'ArrowRight') { e.preventDefault(); if (idx + 1 < items.length) items[idx + 1].focus(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); if (idx - 1 >= 0) items[idx - 1].focus(); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); const next = idx + cols; if (next < items.length) items[next].focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); const prev = idx - cols; if (prev >= 0) items[prev].focus(); }
+  else if (e.key === 'Enter') { e.preventDefault(); focused.click(); cardPickerSave.click(); }
 });
 
 cardPickerFilter.addEventListener('input', () => {
   clearTimeout(pickerFilterTimer);
   pickerFilterTimer = setTimeout(() => {
     const q = cardPickerFilter.value.trim().toLowerCase();
-    if (!q) {
-      renderPickerCards(pickerCards);
-      return;
-    }
+    if (!q) { renderPickerCards(pickerCards); return; }
     const filtered = pickerCards.filter(c =>
-      c.setName.toLowerCase().includes(q) ||
-      c.number.toLowerCase().includes(q) ||
-      c.rarity.toLowerCase().includes(q)
+      c.setName.toLowerCase().includes(q) || c.number.toLowerCase().includes(q) || c.rarity.toLowerCase().includes(q)
     );
     renderPickerCards(filtered);
   }, 150);
 });
 
-// Stats bar toggle
+// ---- Stats bar toggle ----
 statsBar.addEventListener('click', () => {
   statsGenEl.classList.toggle('collapsed');
   statsBar.querySelector('.stats-chevron').classList.toggle('open');
 });
 
-// List keyboard navigation
+// ---- List keyboard navigation ----
 pokemonListEl.addEventListener('keydown', (e) => {
   const rows = pokemonListEl.querySelectorAll('.pokemon-row');
   if (rows.length === 0) return;
   const focused = document.activeElement;
   if (!focused || !focused.classList.contains('pokemon-row')) return;
-
   const cols = getComputedStyle(pokemonListEl).gridTemplateColumns.split(' ').length;
+  const idx = Array.prototype.indexOf.call(rows, focused);
 
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    const idx = Array.prototype.indexOf.call(rows, focused);
-    const next = rows[idx + cols];
-    if (next) next.focus();
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    const idx = Array.prototype.indexOf.call(rows, focused);
-    const prev = rows[idx - cols];
-    if (prev) prev.focus();
-  } else if (e.key === 'ArrowRight') {
-    e.preventDefault();
-    const idx = Array.prototype.indexOf.call(rows, focused);
-    const next = rows[idx + 1];
-    if (next) next.focus();
-  } else if (e.key === 'ArrowLeft') {
-    e.preventDefault();
-    const idx = Array.prototype.indexOf.call(rows, focused);
-    const prev = rows[idx - 1];
-    if (prev) prev.focus();
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    const formId = focused.dataset.formId;
-    if (formId) handleToggleCaught(formId);
-  }
+  if (e.key === 'ArrowDown') { e.preventDefault(); const next = rows[idx + cols]; if (next) next.focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); const prev = rows[idx - cols]; if (prev) prev.focus(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); const next = rows[idx + 1]; if (next) next.focus(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); const prev = rows[idx - 1]; if (prev) prev.focus(); }
+  else if (e.key === 'Enter') { e.preventDefault(); if (focused.dataset.formId) handleToggleCaught(focused.dataset.formId); }
 });
 
-// Binder keyboard navigation — build visual-order slot list
+// ---- Binder keyboard navigation ----
+
 function getVisualSlots() {
   const grids = Array.from(binderContainerEl.querySelectorAll('.binder-grid:not(.binder-page-blank)'));
   if (grids.length <= 1 || state.binderFlow !== 'row') {
     return Array.from(binderContainerEl.querySelectorAll('.binder-slot:not(.empty)'));
   }
-  // Row flow with two grids — interleave rows
   const leftSlots = Array.from(grids[0].querySelectorAll('.binder-slot'));
   const rightSlots = Array.from(grids[1].querySelectorAll('.binder-slot'));
   const cols = getComputedStyle(grids[0]).gridTemplateColumns.split(' ').length;
   const rows = Math.ceil(leftSlots.length / cols);
   const visual = [];
   for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const s = leftSlots[r * cols + c];
-      if (s && !s.classList.contains('empty')) visual.push(s);
-    }
-    for (let c = 0; c < cols; c++) {
-      const s = rightSlots[r * cols + c];
-      if (s && !s.classList.contains('empty')) visual.push(s);
-    }
+    for (let c = 0; c < cols; c++) { const s = leftSlots[r * cols + c]; if (s && !s.classList.contains('empty')) visual.push(s); }
+    for (let c = 0; c < cols; c++) { const s = rightSlots[r * cols + c]; if (s && !s.classList.contains('empty')) visual.push(s); }
   }
   return visual;
 }
@@ -1019,7 +1500,6 @@ document.addEventListener('keydown', (e) => {
   if (currentView !== 'binder' || !cardPickerModal.hidden) return;
   const focused = document.activeElement;
   if (!focused || !focused.dataset.formId) return;
-
   const grid = focused.closest('.binder-grid');
   if (!grid) return;
 
@@ -1027,75 +1507,46 @@ document.addEventListener('keydown', (e) => {
   const visualIdx = visualSlots.indexOf(focused);
   if (visualIdx === -1) return;
 
-  // For up/down, use per-grid navigation
   const gridSlots = Array.from(grid.querySelectorAll('.binder-slot:not(.empty)'));
   const gridIdx = gridSlots.indexOf(focused);
   const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
-
-  // For row flow, up/down spans both grids (total cols across spread)
   const realGrids = Array.from(binderContainerEl.querySelectorAll('.binder-grid:not(.binder-page-blank)'));
   const isRowFlow = state.binderFlow === 'row' && realGrids.length === 2;
   const visualCols = isRowFlow ? cols * 2 : cols;
-
-  const totalViews = getTotalViews(bookCollection.length, state.binderLayout);
+  const layout = getLayout();
+  const totalViews = getTotalViews(bookCollection.length, layout);
 
   if (e.key === 'ArrowRight') {
     e.preventDefault();
-    if (visualIdx + 1 < visualSlots.length) {
-      visualSlots[visualIdx + 1].focus();
-    } else if (binderViewIndex < totalViews - 1) {
-      binderViewIndex++;
-      renderBinder();
-      requestAnimationFrame(() => {
-        const newSlots = getVisualSlots();
-        if (newSlots.length > 0) newSlots[0].focus();
-      });
-    }
+    if (visualIdx + 1 < visualSlots.length) visualSlots[visualIdx + 1].focus();
+    else if (binderViewIndex < totalViews - 1) { binderViewIndex++; renderBinder(); requestAnimationFrame(() => { const ns = getVisualSlots(); if (ns.length) ns[0].focus(); }); }
   } else if (e.key === 'ArrowLeft') {
     e.preventDefault();
-    if (visualIdx - 1 >= 0) {
-      visualSlots[visualIdx - 1].focus();
-    } else if (binderViewIndex > 0) {
-      binderViewIndex--;
-      renderBinder();
-      requestAnimationFrame(() => {
-        const newSlots = getVisualSlots();
-        if (newSlots.length > 0) newSlots[newSlots.length - 1].focus();
-      });
-    }
+    if (visualIdx - 1 >= 0) visualSlots[visualIdx - 1].focus();
+    else if (binderViewIndex > 0) { binderViewIndex--; renderBinder(); requestAnimationFrame(() => { const ns = getVisualSlots(); if (ns.length) ns[ns.length - 1].focus(); }); }
   } else if (e.key === 'ArrowDown') {
     e.preventDefault();
-    if (isRowFlow) {
-      const next = visualIdx + visualCols;
-      if (next < visualSlots.length) visualSlots[next].focus();
-    } else {
-      const next = gridIdx + cols;
-      if (next < gridSlots.length) gridSlots[next].focus();
-    }
+    if (isRowFlow) { const next = visualIdx + visualCols; if (next < visualSlots.length) visualSlots[next].focus(); }
+    else { const next = gridIdx + cols; if (next < gridSlots.length) gridSlots[next].focus(); }
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
-    if (isRowFlow) {
-      const prev = visualIdx - visualCols;
-      if (prev >= 0) visualSlots[prev].focus();
-    } else {
-      const prev = gridIdx - cols;
-      if (prev >= 0) gridSlots[prev].focus();
-    }
+    if (isRowFlow) { const prev = visualIdx - visualCols; if (prev >= 0) visualSlots[prev].focus(); }
+    else { const prev = gridIdx - cols; if (prev >= 0) gridSlots[prev].focus(); }
   } else if (e.key === 'Enter') {
     e.preventDefault();
     const formId = focused.dataset.formId;
     if (formId) {
       const p = bookCollection.find(pk => pk.formId === formId);
-      if (p) openCardPicker(formId, p.name);
+      if (p) handleSlotClick(formId, p.name, e);
     }
   }
 });
 
-// View toggle
+// ---- View toggle ----
 viewListBtn.addEventListener('click', () => switchView('list'));
 viewBinderBtn.addEventListener('click', () => switchView('binder'));
 
-// Binder controls
+// ---- Binder controls ----
 const binderFlowCheck = document.getElementById('binder-flow-check');
 binderLayoutSelect.addEventListener('change', () => {
   setBinderLayout(state, binderLayoutSelect.value);
@@ -1109,18 +1560,18 @@ binderFlowCheck.addEventListener('change', () => {
 binderPrev.addEventListener('click', () => {
   if (binderViewIndex > 0) {
     binderViewIndex--;
-  } else if (selectedBookIndex > 0) {
+  } else if (state.type !== 'freestyle' && selectedBookIndex > 0) {
     selectedBookIndex--;
     rebuildBookCollection();
-    binderViewIndex = getTotalViews(bookCollection.length, state.binderLayout) - 1;
+    binderViewIndex = getTotalViews(bookCollection.length, getLayout()) - 1;
   }
   renderBinder();
 });
 binderNext.addEventListener('click', () => {
-  const totalViews = getTotalViews(bookCollection.length, state.binderLayout);
+  const totalViews = getTotalViews(bookCollection.length, getLayout());
   if (binderViewIndex < totalViews - 1) {
     binderViewIndex++;
-  } else if (selectedBookIndex < state.books.length - 1) {
+  } else if (state.type !== 'freestyle' && selectedBookIndex < state.books.length - 1) {
     selectedBookIndex++;
     rebuildBookCollection();
     binderViewIndex = 0;
@@ -1128,61 +1579,53 @@ binderNext.addEventListener('click', () => {
   renderBinder();
 });
 
-// Page input navigation
+// Page input
 function goToPageFromInput() {
   const pageNum = parseInt(binderPageInput.value, 10);
   if (isNaN(pageNum) || pageNum < 1) return;
-  const layout = state.binderLayout;
+  const layout = getLayout();
   const totalPages = getTotalPages(bookCollection.length, layout);
   const targetPage = Math.min(pageNum, totalPages) - 1;
   const views = buildViews(totalPages);
   for (let v = 0; v < views.length; v++) {
-    if (views[v].pages.includes(targetPage)) {
-      binderViewIndex = v;
-      break;
-    }
+    if (views[v].pages.includes(targetPage)) { binderViewIndex = v; break; }
   }
   renderBinder();
 }
-
 binderPageInput.addEventListener('change', goToPageFromInput);
-binderPageInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); goToPageFromInput(); binderPageInput.blur(); }
-});
+binderPageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); goToPageFromInput(); binderPageInput.blur(); } });
 
-// Export/Import/Reset
+// ---- Export/Import/Reset ----
 exportBtn.addEventListener('click', () => exportState(state));
 importInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   try {
     state = await importState(file);
+    updateTypeAwareControls();
     rebuildCollection();
-    renderFormSettings();
-  } catch (err) {
-    alert('Import failed: ' + err.message);
-  }
+    if (state.type === 'pokedex') renderFormSettings();
+  } catch (err) { alert('Import failed: ' + err.message); }
   importInput.value = '';
 });
 resetBtn.addEventListener('click', () => {
-  if (confirm('Reset all progress? This will mark all Pokemon as uncaught. Form preferences and binder layout will be preserved.')) {
+  if (confirm('Reset all progress? This will mark everything as uncaught.')) {
     resetCaught(state);
     renderCurrentView();
     updateStats();
   }
 });
 
-// Form settings modal
+// ---- Form settings modal ----
 formSettingsBtn.addEventListener('click', () => {
+  if (state.type !== 'pokedex') return;
   formSettingsModal.hidden = false;
   renderFormSettings();
 });
 modalCloseBtn.addEventListener('click', () => { formSettingsModal.hidden = true; });
-formSettingsModal.querySelector('.modal-backdrop').addEventListener('click', () => {
-  formSettingsModal.hidden = true;
-});
+formSettingsModal.querySelector('.modal-backdrop').addEventListener('click', () => { formSettingsModal.hidden = true; });
 
-// --- Sync UI ---
+// ---- Sync UI ----
 const syncBtn = document.getElementById('sync-btn');
 const syncModal = document.getElementById('sync-modal');
 const syncModalClose = document.getElementById('sync-modal-close');
@@ -1193,17 +1636,13 @@ const syncDisconnectBtn = document.getElementById('sync-disconnect-btn');
 const syncStatusBox = document.getElementById('sync-status-box');
 const syncIndicator = document.getElementById('sync-indicator');
 
-function updateSyncButton() {
-  syncBtn.classList.toggle('connected', isSyncConfigured());
-}
+function updateSyncButton() { syncBtn.classList.toggle('connected', isSyncConfigured()); }
 
 function showSyncIndicator(status, message) {
   syncIndicator.textContent = message;
   syncIndicator.className = 'sync-indicator ' + status;
   syncIndicator.hidden = false;
-  if (status === 'synced') {
-    setTimeout(() => { syncIndicator.hidden = true; }, 2000);
-  }
+  if (status === 'synced') setTimeout(() => { syncIndicator.hidden = true; }, 2000);
 }
 
 setStatusCallback(showSyncIndicator);
@@ -1213,7 +1652,7 @@ setRemoteChangeCallback(async (data) => {
     if (remote) {
       state = remote;
       await saveStateLocal(state);
-      binderLayoutSelect.value = state.binderLayout;
+      updateTypeAwareControls();
       binderFlowCheck.checked = state.binderFlow === 'row';
       rebuildCollection();
     }
@@ -1252,7 +1691,7 @@ syncSaveBtn.addEventListener('click', async () => {
         state = remote;
         await saveStateLocal(state);
         setLastSavedJson(serializeState(state));
-        binderLayoutSelect.value = state.binderLayout;
+        updateTypeAwareControls();
         binderFlowCheck.checked = state.binderFlow === 'row';
         rebuildCollection();
       }
@@ -1279,7 +1718,7 @@ syncDisconnectBtn.addEventListener('click', () => {
   updateSyncButton();
 });
 
-// Clean up legacy localStorage keys
+// ---- Legacy cleanup ----
 function cleanupLegacyStorage() {
   localStorage.removeItem('pokedex-tracker');
   const keysToRemove = [];
@@ -1290,13 +1729,12 @@ function cleanupLegacyStorage() {
   for (const key of keysToRemove) localStorage.removeItem(key);
 }
 
-// Init
+// ---- Init ----
 async function init() {
   cleanupLegacyStorage();
   state = await loadState();
   await loadPokemonData();
 
-  // Try loading from Gist if sync is configured
   if (isSyncConfigured()) {
     try {
       const data = await loadFromGist();
@@ -1309,19 +1747,20 @@ async function init() {
       }
       setLastSavedJson(serializeState(state));
       startPolling(10000);
-    } catch {
-      // Fall back to local state silently
-    }
+    } catch { /* Fall back to local state */ }
   }
 
-  binderLayoutSelect.value = state.binderLayout;
+  binderLayoutSelect.value = getLayout();
   binderFlowCheck.checked = state.binderFlow === 'row';
   updateSyncButton();
+  updateTypeAwareControls();
   rebuildCollection();
-  switchView(currentView);
+
+  if (state.type === 'pokedex') switchView(currentView);
+  else switchView('binder');
 }
 
-// Re-sync when tab becomes visible (Safari suspends timers in background)
+// Re-sync on tab focus
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && isSyncConfigured()) {
     try {
@@ -1333,12 +1772,11 @@ document.addEventListener('visibilitychange', async () => {
           state = remote;
           await saveStateLocal(state);
           setLastSavedJson(serializeState(state));
+          updateTypeAwareControls();
           rebuildCollection();
         }
       }
-    } catch {
-      // Ignore
-    }
+    } catch { /* Ignore */ }
   }
 });
 

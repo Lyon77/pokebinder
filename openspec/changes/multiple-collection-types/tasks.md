@@ -20,18 +20,18 @@
 ## 4. Collection Switcher UI
 
 - [x] 4.1 Add collection dropdown HTML to `index.html` — replace static `<h1>` title with a clickable title wrapper containing the collection name, chevron, and a dropdown menu container.
-- [ ] 4.2 Implement dropdown open/close in `js/app.js` — click title opens dropdown, click outside or click item closes it. On open, call `getAllCollections()` and render items with name, type badge, active checkmark, and "+ New Collection" at bottom.
-- [ ] 4.3 Implement collection switching in `js/app.js` — clicking a dropdown item sets `activeCollectionId` in localStorage, reloads state from IndexedDB, and refreshes the full UI.
-- [ ] 4.4 Implement collection deletion — add delete button/icon per dropdown item, show confirm dialog, remove from IndexedDB, handle deleting the active collection (switch to first remaining), prevent deleting last collection.
+- [x] 4.2 Implement dropdown open/close in `js/app.js` — click title opens dropdown, click outside or click item closes it. On open, call `getAllCollections()` and render items with name, type badge, active checkmark, and "+ New Collection" at bottom.
+- [x] 4.3 Implement collection switching in `js/app.js` — clicking a dropdown item sets `activeCollectionId` in localStorage, reloads state from IndexedDB, and refreshes the full UI.
+- [x] 4.4 Implement collection deletion — add delete button/icon per dropdown item, show confirm dialog, remove from IndexedDB, handle deleting the active collection (switch to first remaining), prevent deleting last collection.
 
 ## 5. Collection Creation Modal
 
 - [x] 5.1 Add creation modal HTML to `index.html` — modal with step 1 (name + type cards) and step 2 container for type-specific config. Include gen grid, set search, layout picker, page count input.
-- [ ] 5.2 Implement step 1: type selection — click type card highlights it and shows the corresponding step 2 config panel. Back button returns to step 1.
-- [ ] 5.3 Implement step 2a: Pokedex config — gen checkboxes (Gen I-IX), layout picker (3x3, 3x4, 4x3, 4x4). Create button saves a new Pokedex collection record.
-- [ ] 5.4 Implement step 2b: Master Set config — set search input that calls `fetchSets`, results list with Add buttons, selected sets list showing slot counts (calls `fetchSetCards` + `expandVariants` on add), layout picker. Create button saves collection with expanded `slotList`.
-- [ ] 5.5 Implement step 2c: Freestyle config — layout picker, page count input with computed slot count display. Create button saves collection with null-filled `slots` array.
-- [ ] 5.6 Wire Create button — save new collection to IndexedDB via `saveCollection`, set as active, close modal, refresh UI.
+- [x] 5.2 Implement step 1: type selection — click type card highlights it and shows the corresponding step 2 config panel. Back button returns to step 1.
+- [x] 5.3 Implement step 2a: Pokedex config — gen checkboxes (Gen I-IX), layout picker (3x3, 3x4, 4x3, 4x4). Create button saves a new Pokedex collection record.
+- [x] 5.4 Implement step 2b: Master Set config — set search input that calls `fetchSets`, results list with Add buttons, selected sets list showing slot counts (calls `fetchSetCards` + `expandVariants` on add), layout picker. Create button saves collection with expanded `slotList`.
+- [x] 5.5 Implement step 2c: Freestyle config — layout picker, page count input with computed slot count display. Create button saves collection with null-filled `slots` array.
+- [x] 5.6 Wire Create button — save new collection to IndexedDB via `saveCollection`, set as active, close modal, refresh UI.
 
 ## 6. Binder Slot Rendering
 
@@ -41,26 +41,26 @@
 
 ## 7. Type-Aware Click Handlers
 
-- [ ] 7.1 Update Pokedex slot click — same as current behavior (open card picker, auto-mark owned on card selection).
-- [ ] 7.2 Add Master Set slot click — toggle owned/want (add/remove from caught set, re-render slot). No card picker.
-- [ ] 7.3 Add Freestyle empty slot click — open card picker to search any Pokemon. On card selection, store card data in `slots[index]` and set as want state.
-- [ ] 7.4 Add Freestyle filled slot click — show context menu with options: "Mark owned" / "Mark as want" (toggle caught), "Change card" (reopen picker), "Remove" (set slot to null and remove from caught).
+- [x] 7.1 Update Pokedex slot click — same as current behavior (open card picker, auto-mark owned on card selection).
+- [x] 7.2 Add Master Set slot click — toggle owned/want (add/remove from caught set, re-render slot). No card picker.
+- [x] 7.3 Add Freestyle empty slot click — open card picker to search any Pokemon. On card selection, store card data in `slots[index]` and set as want state.
+- [x] 7.4 Add Freestyle filled slot click — show context menu with options: "Mark owned" / "Mark as want" (toggle caught), "Change card" (reopen picker), "Remove" (set slot to null and remove from caught).
 
 ## 8. Type-Aware UI Controls
 
-- [ ] 8.1 Show/hide controls by type — Forms button visible only for Pokedex. Books button visible for Pokedex and Master Set. List/Binder toggle visible only for Pokedex. Force binder view for Master Set and Freestyle.
-- [ ] 8.2 Update stats computation — `computeStats` needs to work with all types. Pokedex: caught vs total Pokemon. Master Set: caught vs total slots. Freestyle: caught vs filled slots (not total slots).
-- [ ] 8.3 Update header title — display active collection name instead of static "POKEDEX TRACKER". Update on collection switch.
+- [x] 8.1 Show/hide controls by type — Forms button visible only for Pokedex. Books button visible for Pokedex and Master Set. List/Binder toggle visible only for Pokedex. Force binder view for Master Set and Freestyle.
+- [x] 8.2 Update stats computation — `computeStats` needs to work with all types. Pokedex: caught vs total Pokemon. Master Set: caught vs total slots. Freestyle: caught vs filled slots (not total slots).
+- [x] 8.3 Update header title — display active collection name instead of static "POKEDEX TRACKER". Update on collection switch.
 
 ## 9. Book Settings Adaptation
 
-- [ ] 9.1 Update book settings modal for Pokedex — filter generation chips to only show the collection's selected generations (not all 9).
-- [ ] 9.2 Add Master Set book settings — show set name chips instead of generation chips. Same drag-and-drop assignment to books. Book data uses `{ sets: ["swsh12pt5"] }` instead of `{ generations: [1,2] }`.
-- [ ] 9.3 Hide book settings for Freestyle — disable or hide the Books button when a Freestyle collection is active.
+- [x] 9.1 Update book settings modal for Pokedex — filter generation chips to only show the collection's selected generations (not all 9).
+- [x] 9.2 Add Master Set book settings — show set name chips instead of generation chips. Same drag-and-drop assignment to books. Book data uses `{ sets: ["swsh12pt5"] }` instead of `{ generations: [1,2] }`.
+- [x] 9.3 Hide book settings for Freestyle — disable or hide the Books button when a Freestyle collection is active.
 
 ## 10. Integration and Cleanup
 
-- [ ] 10.1 Update export/import — `exportState` and `importState` must handle the new collection fields (type, layout, type-specific data).
-- [ ] 10.2 Update sync serialization — `serializeState` and `loadStateFromData` include type-specific fields in the Gist payload.
-- [ ] 10.3 Remove mockups directory — clean up `mockups/` folder created during design exploration.
-- [ ] 10.4 End-to-end verification — test creating each collection type, switching between them, toggling owned/want, book settings, card picker for each type, export/import, and sync.
+- [x] 10.1 Update export/import — `exportState` and `importState` must handle the new collection fields (type, layout, type-specific data).
+- [x] 10.2 Update sync serialization — `serializeState` and `loadStateFromData` include type-specific fields in the Gist payload.
+- [x] 10.3 Remove mockups directory — clean up `mockups/` folder created during design exploration.
+- [x] 10.4 End-to-end verification — test creating each collection type, switching between them, toggling owned/want, book settings, card picker for each type, export/import, and sync.
