@@ -98,7 +98,6 @@ function buildPokedexSlot(slot, p, isCaught, cardSelections, onPickCard) {
 
 function buildMasterSlot(slot, p, isCaught, onToggle) {
   const variantLabel = getVariantLabel(p.variant);
-  const showBadge = variantLabel && variantLabel !== 'Normal' && variantLabel !== '';
 
   if (isCaught) {
     slot.className = 'binder-slot has-card caught';
@@ -109,9 +108,9 @@ function buildMasterSlot(slot, p, isCaught, onToggle) {
   slot.innerHTML = `
     <div class="slot-nums">
       <span class="col-num">#${p.number}</span>
+      <span class="slot-variant-label">${variantLabel || ''}</span>
       <span class="dex-num">${isCaught ? '&#10003;' : ''}</span>
     </div>
-    ${showBadge ? `<div class="slot-variant-badge">${variantLabel.toUpperCase()}</div>` : ''}
     <img class="slot-card-img" src="${p.imageSmall}" alt="${p.name}" loading="lazy"${!isCaught ? ' style="filter:grayscale(1);opacity:0.4;"' : ''}>
   `;
 

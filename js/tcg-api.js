@@ -1,6 +1,6 @@
 import { getCachedCards, cacheCards } from './db.js';
 
-const VARIANT_ORDER = ['normal', '1stEditionNormal', 'reverseHolofoil', 'holofoil', '1stEditionHolofoil', 'default'];
+const VARIANT_ORDER = ['normal', 'holofoil', '1stEditionNormal', '1stEditionHolofoil', 'reverseHolofoil', 'default'];
 
 const VARIANT_LABELS = {
   normal: 'Normal',
