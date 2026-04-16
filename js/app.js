@@ -1407,6 +1407,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Enter') {
     const focused = document.activeElement;
     if (focused && focused.classList.contains('card-picker-item')) return;
+    if (focused === cardPickerFilter) return;
     e.preventDefault();
     cardPickerSave.click();
   }
