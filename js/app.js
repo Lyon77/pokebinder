@@ -192,7 +192,7 @@ function updateTypeAwareControls() {
   }
 
   // Update header title
-  collectionTitle.innerHTML = `${(state.collectionName || 'Collection').toUpperCase()} <span class="chevron">&#9660;</span>`;
+  collectionTitle.innerHTML = `${(state.collectionName || 'Collection').toUpperCase()} <span class="chevron"></span>`;
 
   // Update layout selector to match collection
   binderLayoutSelect.value = getLayout();
@@ -338,7 +338,7 @@ collectionTitle.addEventListener('click', async (e) => {
       </div>
       <div class="collection-dd-right">
         <span class="collection-dd-type">${typeBadge}</span>
-        <button class="collection-dd-rename" data-rename-id="${c.id}" title="Rename">&#9998;</button>
+        <button class="collection-dd-rename" data-rename-id="${c.id}" title="Rename">edit</button>
         ${collections.length > 1 ? `<button class="collection-dd-delete" data-delete-id="${c.id}" title="Delete">&times;</button>` : ''}
       </div>
     `;
