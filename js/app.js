@@ -1498,7 +1498,11 @@ cardPickerGrid.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowLeft') { e.preventDefault(); if (idx - 1 >= 0) items[idx - 1].focus(); }
   else if (e.key === 'ArrowDown') { e.preventDefault(); const next = idx + cols; if (next < items.length) items[next].focus(); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); const prev = idx - cols; if (prev >= 0) items[prev].focus(); }
-  else if (e.key === 'Enter') { e.preventDefault(); focused.click(); cardPickerSave.click(); }
+  else if (e.key === 'Enter') {
+    e.preventDefault();
+    focused.click();
+    if (pickerMode === 'cards') cardPickerSave.click();
+  }
 });
 
 cardPickerFilter.addEventListener('input', () => {

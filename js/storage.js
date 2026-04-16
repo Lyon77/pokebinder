@@ -202,7 +202,10 @@ async function clearCardSelection(state, formId) {
 }
 
 async function setFreestyleSlot(state, index, cardData) {
-  if (state.type === 'freestyle' && state.slots) {
+  if (state.type === 'freestyle') {
+    if (!state.slots) state.slots = [];
+    // Expand array if needed
+    while (state.slots.length <= index) state.slots.push(null);
     state.slots[index] = cardData;
   }
   await saveState(state);
