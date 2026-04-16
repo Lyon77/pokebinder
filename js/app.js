@@ -1413,19 +1413,13 @@ document.addEventListener('keydown', (e) => {
 });
 
 cardPickerSave.addEventListener('click', () => {
-  console.log('[Save] pickerFormId:', pickerFormId, 'type:', state.type, 'selectedCard:', pickerSelectedCard?.cardId);
-
   if (!pickerFormId) { closeCardPicker(); return; }
 
   if (state.type === 'freestyle') {
     const idx = parseInt(pickerFormId, 10);
-    console.log('[Save freestyle] idx:', idx, 'card:', pickerSelectedCard?.name, 'slots length:', state.slots?.length);
     if (pickerSelectedCard && pickerSelectedCard.cardId !== '__empty__') {
       setFreestyleSlot(state, idx, pickerSelectedCard);
-      console.log('[Save freestyle] slot set, slots[idx]:', state.slots[idx]?.name);
       rebuildCollection();
-    } else {
-      console.log('[Save freestyle] SKIPPED — no card selected or empty card');
     }
   } else if (state.type === 'pokedex') {
     if (pickerSelectedCard) {
@@ -1506,8 +1500,16 @@ cardPickerGrid.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowUp') { e.preventDefault(); const prev = idx - cols; if (prev >= 0) items[prev].focus(); }
   else if (e.key === 'Enter') {
     e.preventDefault();
-    focused.click();
-    if (pickerMode === 'cards') cardPickerSave.click();
+    if (pickerMode !== 'cards') {
+      focused.click(); // select Pokemon in search mode
+      return;
+    }
+    // If this card isn't selected yet, select it then save
+    // If already selected, just save
+    if (!focused.classList.contains('selected')) {
+      focused.click();
+    }
+    cardPickerSave.click();
   }
 });
 
