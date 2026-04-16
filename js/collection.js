@@ -29,21 +29,12 @@ function buildPokedexCollection(state) {
   return active;
 }
 
-const VARIANT_SORT_ORDER = ['normal', 'holofoil', '1stEditionNormal', '1stEditionHolofoil', 'reverseHolofoil', 'default'];
-
-function parseCardNum(raw) {
-  // Handle "H1/144", "1/144", "TG1/30", etc.
-  const num = (raw || '').split('/')[0];
-  const match = num.match(/^([A-Za-z]*)(\d+)$/);
-  if (!match) return [num, 0];
-  return [match[1].toUpperCase(), parseInt(match[2], 10)];
-}
-
 function buildMasterCollection(state) {
-  const slots = (state.slotList || []).map((slot, i) => ({
+  const slots = state.slotList || [];
+  return slots.map((slot, i) => ({
     ...slot,
     formId: slot.slotId,
-    id: parseCardNum(slot.number)[1] || (i + 1),
+    id: parseInt(slot.number, 10) || (i + 1),
     collectionNum: i + 1,
     generation: 0,
     isDefault: true,
@@ -52,27 +43,6 @@ function buildMasterCollection(state) {
     formSubCategory: null,
     types: [],
   }));
-
-  // Sort at display time: numeric cards first, then prefixed (H, TG, etc.), then variant order
-  slots.sort((a, b) => {
-    // Group by set first (preserve set ordering from slotList)
-    if (a.setId !== b.setId) return 0; // stable sort preserves original set grouping
-    const [prefA, numA] = parseCardNum(a.number);
-    const [prefB, numB] = parseCardNum(b.number);
-    if (prefA !== prefB) {
-      if (!prefA) return -1;
-      if (!prefB) return 1;
-      return prefA.localeCompare(prefB);
-    }
-    if (numA !== numB) return numA - numB;
-    const vi = (v) => { const idx = VARIANT_SORT_ORDER.indexOf(v); return idx === -1 ? 99 : idx; };
-    return vi(a.variant) - vi(b.variant);
-  });
-
-  // Reassign collection numbers after sort
-  for (let i = 0; i < slots.length; i++) slots[i].collectionNum = i + 1;
-
-  return slots;
 }
 
 function buildFreestyleCollection(state) {
