@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup: Collection Creation Flow</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a1628; --surface: #0f1e38; --surface-alt: #162840;
+      --text: #e0e0e0; --text-muted: #557788;
+      --accent: #ff3333; --accent-dim: #cc2222;
+      --caught-bg: #0a2018; --caught-border: #00ff44;
+      --border: #1a3050; --radius: 4px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Roboto Mono', monospace; font-size: 0.85rem; padding: 1rem; }
+    .section-label { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: var(--accent); letter-spacing: 1px; margin: 2rem 0 1rem; }
+
+    .modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      max-width: 520px; margin: 1rem auto; padding: 0; overflow: hidden;
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
+    }
+    .modal-header h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; color: var(--caught-border); }
+    .modal-body { padding: 1rem; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 0.75rem 1rem; border-top: 1px solid var(--border); }
+
+    .btn { background: transparent; border: 1px solid var(--text-muted); border-radius: var(--radius); color: var(--text-muted); padding: 0.4rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; }
+    .btn:hover { color: var(--text); border-color: var(--text); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-dim); }
+    .btn-close { background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; }
+
+    .form-label { display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem; margin-top: 0.8rem; }
+    .form-label:first-child { margin-top: 0; }
+    .form-input {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text); padding: 0.5rem 0.7rem; font-family: inherit; font-size: 0.8rem;
+    }
+    .form-select {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text); padding: 0.5rem 0.7rem; font-family: inherit; font-size: 0.8rem;
+    }
+
+    /* Type cards */
+    .type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.5rem; }
+    .type-card {
+      border: 2px solid var(--border); border-radius: var(--radius); padding: 0.8rem 0.6rem;
+      text-align: center; cursor: pointer; transition: all 0.15s; background: var(--bg);
+    }
+    .type-card:hover { border-color: var(--text-muted); }
+    .type-card.selected { border-color: var(--caught-border); background: var(--caught-bg); }
+    .type-icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+    .type-name { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.2rem; }
+    .type-desc { font-size: 0.6rem; color: var(--text-muted); line-height: 1.3; }
+    .type-card.selected .type-desc { color: var(--caught-border); opacity: 0.7; }
+
+    /* Gen checkboxes */
+    .gen-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-top: 0.3rem; }
+    .gen-check {
+      display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem;
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+      cursor: pointer; font-size: 0.75rem; transition: all 0.15s;
+    }
+    .gen-check:hover { border-color: var(--text-muted); }
+    .gen-check.checked { border-color: var(--caught-border); background: var(--caught-bg); color: var(--caught-border); }
+    .gen-check .box { width: 14px; height: 14px; border: 1px solid var(--text-muted); border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; }
+    .gen-check.checked .box { border-color: var(--caught-border); color: var(--caught-border); }
+
+    /* Set search */
+    .set-results { margin-top: 0.4rem; max-height: 140px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+    .set-result {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border); font-size: 0.75rem;
+    }
+    .set-result:last-child { border-bottom: none; }
+    .set-result:hover { background: var(--surface-alt); }
+    .set-info { display: flex; flex-direction: column; gap: 0.1rem; }
+    .set-name { font-weight: 500; }
+    .set-meta { font-size: 0.65rem; color: var(--text-muted); }
+    .btn-add { padding: 0.25rem 0.5rem; font-size: 0.65rem; border-color: var(--caught-border); color: var(--caught-border); }
+
+    .selected-sets { margin-top: 0.5rem; }
+    .selected-set {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.4rem 0.6rem; background: var(--caught-bg); border: 1px solid var(--caught-border);
+      border-radius: var(--radius); margin-bottom: 0.3rem; font-size: 0.75rem;
+    }
+    .selected-set .slots { font-size: 0.65rem; color: var(--caught-border); }
+    .btn-remove { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; }
+
+    /* Layout selector */
+    .layout-grid { display: flex; gap: 0.5rem; margin-top: 0.3rem; flex-wrap: wrap; }
+    .layout-option {
+      border: 2px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.8rem;
+      text-align: center; cursor: pointer; transition: all 0.15s; background: var(--bg);
+      min-width: 60px;
+    }
+    .layout-option:hover { border-color: var(--text-muted); }
+    .layout-option.selected { border-color: var(--caught-border); background: var(--caught-bg); }
+    .layout-preview { font-size: 0.6rem; color: var(--text-muted); display: grid; gap: 1px; margin-bottom: 0.3rem; }
+    .layout-option.selected .layout-preview { color: var(--caught-border); }
+    .layout-preview span { background: currentColor; width: 8px; height: 10px; border-radius: 1px; opacity: 0.5; }
+    .layout-label { font-size: 0.7rem; }
+
+    .divider { border: none; border-top: 2px solid var(--accent); margin: 2rem 0 0; }
+  </style>
+</head>
+<body>
+
+<div class="section-label">STEP 1: PICK A TYPE</div>
+<div class="modal">
+  <div class="modal-header">
+    <h2>New Collection</h2>
+    <button class="btn-close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <label class="form-label">Name</label>
+    <input class="form-input" placeholder="My Collection">
+
+    <label class="form-label">Type</label>
+    <div class="type-grid">
+      <div class="type-card selected">
+        <div class="type-icon">&#128214;</div>
+        <div class="type-name">Pokedex</div>
+        <div class="type-desc">Collect one card per Pokemon</div>
+      </div>
+      <div class="type-card">
+        <div class="type-icon">&#11088;</div>
+        <div class="type-name">Master Set</div>
+        <div class="type-desc">Complete every card in a set</div>
+      </div>
+      <div class="type-card">
+        <div class="type-icon">&#127912;</div>
+        <div class="type-name">Freestyle</div>
+        <div class="type-desc">Build your own custom binder</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<div class="section-label">STEP 2A: POKEDEX CONFIG</div>
+<div class="modal">
+  <div class="modal-header">
+    <h2>New Pokedex Collection</h2>
+    <button class="btn-close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <label class="form-label">Name</label>
+    <input class="form-input" value="Kanto Living Dex">
+
+    <label class="form-label">Generations</label>
+    <div class="gen-grid">
+      <div class="gen-check checked"><div class="box">&#10003;</div> Gen I</div>
+      <div class="gen-check checked"><div class="box">&#10003;</div> Gen II</div>
+      <div class="gen-check"><div class="box"></div> Gen III</div>
+      <div class="gen-check"><div class="box"></div> Gen IV</div>
+      <div class="gen-check"><div class="box"></div> Gen V</div>
+      <div class="gen-check"><div class="box"></div> Gen VI</div>
+      <div class="gen-check"><div class="box"></div> Gen VII</div>
+      <div class="gen-check"><div class="box"></div> Gen VIII</div>
+      <div class="gen-check"><div class="box"></div> Gen IX</div>
+    </div>
+
+    <label class="form-label">Page Layout</label>
+    <div class="layout-grid">
+      <div class="layout-option selected">
+        <div class="layout-preview" style="grid-template-columns: repeat(3, 1fr);">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">3&times;3</div>
+      </div>
+      <div class="layout-option">
+        <div class="layout-preview" style="grid-template-columns: repeat(3, 1fr);">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">3&times;4</div>
+      </div>
+      <div class="layout-option">
+        <div class="layout-preview" style="grid-template-columns: repeat(4, 1fr);">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">4&times;3</div>
+      </div>
+      <div class="layout-option">
+        <div class="layout-preview" style="grid-template-columns: repeat(4, 1fr);">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">4&times;4</div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn">Cancel</button>
+    <button class="btn btn-primary">Create</button>
+  </div>
+</div>
+
+<hr class="divider">
+
+<div class="section-label">STEP 2B: MASTER SET CONFIG</div>
+<div class="modal">
+  <div class="modal-header">
+    <h2>New Master Set Collection</h2>
+    <button class="btn-close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <label class="form-label">Name</label>
+    <input class="form-input" value="Modern Masters">
+
+    <label class="form-label">Search Sets</label>
+    <input class="form-input" placeholder="Search by set name..." value="Crown">
+    <div class="set-results">
+      <div class="set-result">
+        <div class="set-info">
+          <span class="set-name">Crown Zenith</span>
+          <span class="set-meta">SWSH &middot; 2023 &middot; 160 cards &middot; ~269 slots</span>
+        </div>
+        <button class="btn btn-add">Add</button>
+      </div>
+      <div class="set-result">
+        <div class="set-info">
+          <span class="set-name">Crown Zenith: Galarian Gallery</span>
+          <span class="set-meta">SWSH &middot; 2023 &middot; 70 cards &middot; ~70 slots</span>
+        </div>
+        <button class="btn btn-add">Add</button>
+      </div>
+    </div>
+
+    <label class="form-label">Selected Sets</label>
+    <div class="selected-sets">
+      <div class="selected-set">
+        <div>
+          <div>Crown Zenith</div>
+          <div class="slots">160 cards &middot; ~269 variant slots</div>
+        </div>
+        <button class="btn-remove">&times;</button>
+      </div>
+      <div class="selected-set">
+        <div>
+          <div>Pokemon 151</div>
+          <div class="slots">207 cards &middot; ~360 variant slots</div>
+        </div>
+        <button class="btn-remove">&times;</button>
+      </div>
+    </div>
+
+    <label class="form-label">Page Layout</label>
+    <div class="layout-grid">
+      <div class="layout-option selected">
+        <div class="layout-preview" style="grid-template-columns: repeat(3, 1fr);">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">3&times;3</div>
+      </div>
+      <div class="layout-option">
+        <div class="layout-preview" style="grid-template-columns: repeat(3, 1fr);">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">3&times;4</div>
+      </div>
+      <div class="layout-option">
+        <div class="layout-preview" style="grid-template-columns: repeat(4, 1fr);">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">4&times;3</div>
+      </div>
+      <div class="layout-option">
+        <div class="layout-preview" style="grid-template-columns: repeat(4, 1fr);">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">4&times;4</div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn">Cancel</button>
+    <button class="btn btn-primary">Create</button>
+  </div>
+</div>
+
+<hr class="divider">
+
+<div class="section-label">STEP 2C: FREESTYLE CONFIG</div>
+<div class="modal">
+  <div class="modal-header">
+    <h2>New Freestyle Collection</h2>
+    <button class="btn-close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <label class="form-label">Name</label>
+    <input class="form-input" value="Favorite Cards">
+
+    <label class="form-label">Page Layout</label>
+    <div class="layout-grid">
+      <div class="layout-option selected">
+        <div class="layout-preview" style="grid-template-columns: repeat(3, 1fr);">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">3&times;3</div>
+      </div>
+      <div class="layout-option">
+        <div class="layout-preview" style="grid-template-columns: repeat(3, 1fr);">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">3&times;4</div>
+      </div>
+      <div class="layout-option">
+        <div class="layout-preview" style="grid-template-columns: repeat(4, 1fr);">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">4&times;3</div>
+      </div>
+      <div class="layout-option">
+        <div class="layout-preview" style="grid-template-columns: repeat(4, 1fr);">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="layout-label">4&times;4</div>
+      </div>
+    </div>
+
+    <label class="form-label">Number of Pages</label>
+    <input class="form-input" type="number" value="8" min="1" max="100" style="width: 80px;">
+    <span style="font-size: 0.7rem; color: var(--text-muted); margin-left: 0.5rem;">= 72 slots (9 per page)</span>
+  </div>
+  <div class="modal-footer">
+    <button class="btn">Cancel</button>
+    <button class="btn btn-primary">Create</button>
+  </div>
+</div>
+
+</body>
+</html>

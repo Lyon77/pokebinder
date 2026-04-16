@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup: Collection Tabs</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a1628; --surface: #0f1e38; --surface-alt: #162840;
+      --text: #e0e0e0; --text-muted: #557788;
+      --accent: #ff3333; --accent-dim: #cc2222;
+      --caught-bg: #0a2018; --caught-border: #00ff44;
+      --border: #1a3050; --radius: 4px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Roboto Mono', monospace; font-size: 0.85rem; }
+    h1 { font-family: 'Orbitron', sans-serif; font-size: 0.95rem; letter-spacing: 2px; color: var(--caught-border); }
+    .section-label { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: var(--accent); letter-spacing: 1px; margin: 2rem 0 1rem; padding: 0 1rem; }
+
+    /* Option A: Tabs above header */
+    .tabs-bar {
+      display: flex; align-items: center; gap: 0;
+      background: var(--bg); border-bottom: 2px solid var(--border);
+      padding: 0 0.5rem; overflow-x: auto;
+    }
+    .tab {
+      padding: 0.6rem 1rem; font-size: 0.75rem; font-family: 'Roboto Mono', monospace;
+      color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
+      margin-bottom: -2px; white-space: nowrap; transition: all 0.15s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--caught-border); border-bottom-color: var(--caught-border); }
+    .tab-add {
+      padding: 0.6rem 0.8rem; font-size: 0.9rem; color: var(--text-muted);
+      cursor: pointer; margin-bottom: -2px;
+    }
+    .tab-add:hover { color: var(--caught-border); }
+    .tab-type { font-size: 0.6rem; color: var(--text-muted); display: block; margin-top: 1px; }
+    .tab.active .tab-type { color: var(--caught-border); opacity: 0.6; }
+
+    .header {
+      background: var(--surface); padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .header-row { display: flex; justify-content: space-between; align-items: center; }
+    .header-actions { display: flex; gap: 0.3rem; }
+    .btn { background: transparent; border: 1px solid var(--text-muted); border-radius: var(--radius); color: var(--text-muted); padding: 0.35rem 0.7rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; }
+    .btn:hover { color: var(--text); border-color: var(--text); }
+    .stats-row { margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+    .stats-label { font-size: 0.8rem; color: var(--caught-border); font-weight: 600; }
+    .progress-bar { flex: 1; height: 6px; background: var(--border); border-radius: 3px; }
+    .progress-fill { height: 100%; background: var(--caught-border); border-radius: 3px; width: 35%; }
+    .controls-row { margin-top: 0.5rem; display: flex; gap: 0.4rem; align-items: center; }
+    .search-input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); padding: 0.4rem 0.6rem; font-family: inherit; font-size: 0.8rem; }
+    .placeholder { padding: 3rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; }
+
+    /* Option B: Tabs inside header */
+    .header-tabs {
+      display: flex; align-items: center; gap: 0; margin-bottom: 0.5rem;
+    }
+    .header-tab {
+      padding: 0.4rem 0.8rem; font-size: 0.7rem; font-family: 'Roboto Mono', monospace;
+      color: var(--text-muted); cursor: pointer; border: 1px solid var(--border);
+      border-radius: var(--radius); margin-right: 0.3rem; transition: all 0.15s;
+    }
+    .header-tab:hover { color: var(--text); border-color: var(--text); }
+    .header-tab.active { color: var(--caught-border); border-color: var(--caught-border); background: var(--caught-bg); }
+    .header-tab-add { padding: 0.4rem 0.6rem; font-size: 0.8rem; color: var(--text-muted); cursor: pointer; border: 1px dashed var(--border); border-radius: var(--radius); }
+
+    /* Option C: Dropdown */
+    .title-dropdown {
+      display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer;
+      font-family: 'Orbitron', sans-serif; font-size: 0.95rem; letter-spacing: 2px; color: var(--caught-border);
+    }
+    .title-dropdown .chevron { font-size: 0.6rem; transition: transform 0.2s; }
+    .dropdown-menu {
+      position: absolute; top: 100%; left: 0; margin-top: 0.3rem;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      min-width: 250px; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .dropdown-item {
+      padding: 0.6rem 0.8rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--border); font-size: 0.8rem;
+    }
+    .dropdown-item:last-child { border-bottom: none; }
+    .dropdown-item:hover { background: var(--surface-alt); }
+    .dropdown-item.active { color: var(--caught-border); }
+    .dropdown-item .check { color: var(--caught-border); }
+    .dropdown-item .type-badge { font-size: 0.6rem; color: var(--text-muted); }
+    .dropdown-divider { border-top: 1px solid var(--border); }
+    .dropdown-item.add { color: var(--caught-border); }
+    .title-wrapper { position: relative; }
+
+    .divider { border: none; border-top: 2px solid var(--accent); margin: 3rem 1rem 0; }
+  </style>
+</head>
+<body>
+
+<div class="section-label">OPTION A: TABS ABOVE HEADER</div>
+<div class="tabs-bar">
+  <div class="tab active">Living Dex <span class="tab-type">Pokedex</span></div>
+  <div class="tab">Crown Zenith <span class="tab-type">Master Set</span></div>
+  <div class="tab">151 Master <span class="tab-type">Master Set</span></div>
+  <div class="tab">Favorites <span class="tab-type">Freestyle</span></div>
+  <div class="tab-add">+</div>
+</div>
+<div class="header">
+  <div class="header-row">
+    <h1>LIVING DEX</h1>
+    <div class="header-actions">
+      <button class="btn">Export</button>
+      <button class="btn">Import</button>
+      <button class="btn">Sync</button>
+    </div>
+  </div>
+  <div class="stats-row">
+    <span class="stats-label">452 / 1288 (35.1%)</span>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+  <div class="controls-row">
+    <input class="search-input" placeholder="Search by name or number...">
+    <button class="btn">Forms</button>
+    <button class="btn">Books</button>
+  </div>
+</div>
+<div class="placeholder">[ Binder content here ]</div>
+
+<hr class="divider">
+
+<div class="section-label">OPTION B: TABS INSIDE HEADER (PILL STYLE)</div>
+<div class="header">
+  <div class="header-tabs">
+    <div class="header-tab active">Living Dex</div>
+    <div class="header-tab">Crown Zenith</div>
+    <div class="header-tab">151 Master</div>
+    <div class="header-tab">Favorites</div>
+    <div class="header-tab-add">+</div>
+  </div>
+  <div class="header-row">
+    <h1>LIVING DEX</h1>
+    <div class="header-actions">
+      <button class="btn">Export</button>
+      <button class="btn">Import</button>
+      <button class="btn">Sync</button>
+    </div>
+  </div>
+  <div class="stats-row">
+    <span class="stats-label">452 / 1288 (35.1%)</span>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+  <div class="controls-row">
+    <input class="search-input" placeholder="Search by name or number...">
+    <button class="btn">Forms</button>
+    <button class="btn">Books</button>
+  </div>
+</div>
+<div class="placeholder">[ Binder content here ]</div>
+
+<hr class="divider">
+
+<div class="section-label">OPTION C: DROPDOWN FROM TITLE</div>
+<div class="header">
+  <div class="header-row">
+    <div class="title-wrapper">
+      <div class="title-dropdown">LIVING DEX <span class="chevron">&#9660;</span></div>
+      <div class="dropdown-menu">
+        <div class="dropdown-item active"><span>&#10003; Living Dex</span> <span class="type-badge">Pokedex</span></div>
+        <div class="dropdown-item"><span>&nbsp;&nbsp; Crown Zenith</span> <span class="type-badge">Master Set</span></div>
+        <div class="dropdown-item"><span>&nbsp;&nbsp; 151 Master</span> <span class="type-badge">Master Set</span></div>
+        <div class="dropdown-item"><span>&nbsp;&nbsp; Favorites</span> <span class="type-badge">Freestyle</span></div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item add">+ New Collection</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn">Export</button>
+      <button class="btn">Import</button>
+      <button class="btn">Sync</button>
+    </div>
+  </div>
+  <div class="stats-row">
+    <span class="stats-label">452 / 1288 (35.1%)</span>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+  <div class="controls-row">
+    <input class="search-input" placeholder="Search by name or number...">
+    <button class="btn">Forms</button>
+    <button class="btn">Books</button>
+  </div>
+</div>
+<div class="placeholder">[ Binder content here ]</div>
+
+</body>
+</html>
