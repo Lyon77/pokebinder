@@ -338,11 +338,12 @@ collectionTitle.addEventListener('click', async (e) => {
       </div>
       <div class="collection-dd-right">
         <span class="collection-dd-type">${typeBadge}</span>
+        <button class="collection-dd-rename" data-rename-id="${c.id}" title="Rename">&#9998;</button>
         ${collections.length > 1 ? `<button class="collection-dd-delete" data-delete-id="${c.id}" title="Delete">&times;</button>` : ''}
       </div>
     `;
     item.addEventListener('click', async (e) => {
-      if (e.target.closest('.collection-dd-delete')) return;
+      if (e.target.closest('.collection-dd-delete') || e.target.closest('.collection-dd-rename')) return;
       if (c.id !== activeId) {
         setActiveCollectionId(c.id);
         state = await loadState();
@@ -375,6 +376,27 @@ collectionTitle.addEventListener('click', async (e) => {
           binderViewIndex = 0;
           updateTypeAwareControls();
           rebuildCollection();
+        }
+      }
+      closeCollectionDropdown();
+    });
+  }
+
+  // Rename handlers
+  for (const btn of collectionDropdown.querySelectorAll('.collection-dd-rename')) {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.renameId;
+      const c = collections.find(c => c.id === id);
+      const newName = prompt('Rename collection:', c?.name || '');
+      if (!newName || !newName.trim()) return;
+      const record = await (await import('./db.js')).getCollection(id);
+      if (record) {
+        record.name = newName.trim();
+        await saveCollection(record);
+        if (id === activeId) {
+          state.collectionName = newName.trim();
+          updateTypeAwareControls();
         }
       }
       closeCollectionDropdown();
