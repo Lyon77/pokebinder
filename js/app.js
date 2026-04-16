@@ -1249,25 +1249,40 @@ let pickerFilterTimer;
 let pickerPreviousFocus = null;
 let pickerCurrentName = null;
 
+let pickerMode = 'cards'; // 'pokemon-search' or 'cards'
+
 async function openCardPicker(formId, pokemonName) {
   pickerPreviousFocus = document.activeElement;
   pickerFormId = formId;
   pickerCurrentName = pokemonName;
+  pickerSelectedCard = null;
 
   if (state.type === 'pokedex') {
     const existingCard = state.cardSelections[formId];
     const isCaught = state.caught.has(formId);
     if (existingCard) pickerSelectedCard = existingCard;
     else if (isCaught) pickerSelectedCard = EMPTY_CARD;
-    else pickerSelectedCard = null;
-  } else {
-    pickerSelectedCard = null;
   }
 
-  cardPickerName.textContent = pokemonName || 'Select a card';
   cardPickerFilter.value = '';
   cardPickerModal.hidden = false;
 
+  if (state.type === 'freestyle' && !pokemonName) {
+    // Freestyle: show Pokemon search first
+    pickerMode = 'pokemon-search';
+    cardPickerName.textContent = 'Search for a Pokemon';
+    cardPickerFilter.placeholder = 'Type a Pokemon name...';
+    cardPickerGrid.innerHTML = '<div class="card-picker-loading" style="color:var(--text-muted)">Type a Pokemon name above to search for cards</div>';
+    cardPickerCount.textContent = '';
+    updatePickerFooter();
+    cardPickerFilter.focus();
+    return;
+  }
+
+  // Normal flow: load cards for the given Pokemon
+  pickerMode = 'cards';
+  cardPickerName.textContent = pokemonName || 'Select a card';
+  cardPickerFilter.placeholder = 'Filter by set, number, rarity...';
   cardPickerGrid.innerHTML = '<div class="card-picker-loading">Loading cards...</div>';
   cardPickerCount.textContent = '';
   updatePickerFooter();
@@ -1363,6 +1378,8 @@ function closeCardPicker() {
   pickerCurrentName = null;
   pickerCards = [];
   pickerSelectedCard = null;
+  pickerMode = 'cards';
+  cardPickerFilter.placeholder = 'Filter by set, number, rarity...';
 }
 
 function restorePickerFocus() {
@@ -1486,11 +1503,73 @@ cardPickerGrid.addEventListener('keydown', (e) => {
 
 cardPickerFilter.addEventListener('input', () => {
   clearTimeout(pickerFilterTimer);
-  pickerFilterTimer = setTimeout(() => {
-    const q = cardPickerFilter.value.trim().toLowerCase();
-    if (!q) { renderPickerCards(pickerCards); return; }
+  pickerFilterTimer = setTimeout(async () => {
+    const q = cardPickerFilter.value.trim();
+    if (!q) {
+      if (pickerMode === 'pokemon-search') {
+        cardPickerGrid.innerHTML = '<div class="card-picker-loading" style="color:var(--text-muted)">Type a Pokemon name above to search for cards</div>';
+        cardPickerCount.textContent = '';
+      } else {
+        renderPickerCards(pickerCards);
+      }
+      return;
+    }
+
+    if (pickerMode === 'pokemon-search') {
+      // Search for Pokemon names, show as clickable list
+      cardPickerGrid.innerHTML = '';
+      cardPickerCount.textContent = '';
+      const allPokemon = (await import('./data.js')).getAllPokemon();
+      const ql = q.toLowerCase();
+      const matches = allPokemon
+        .filter(p => p.isDefault && p.name.toLowerCase().includes(ql))
+        .slice(0, 20);
+
+      if (matches.length === 0) {
+        cardPickerGrid.innerHTML = '<div class="card-picker-loading" style="color:var(--text-muted)">No Pokemon found</div>';
+        return;
+      }
+
+      for (const p of matches) {
+        const item = document.createElement('div');
+        item.className = 'card-picker-item card-picker-empty';
+        item.tabIndex = 0;
+        item.innerHTML = `
+          <div class="card-picker-empty-art" style="font-size:1rem;">#${p.id}</div>
+          <div class="card-picker-item-info">
+            <div><span class="card-picker-item-number">${p.name}</span></div>
+          </div>
+        `;
+        item.addEventListener('click', async () => {
+          // Switch to cards mode for this Pokemon
+          pickerMode = 'cards';
+          pickerCurrentName = p.name;
+          cardPickerName.textContent = `Cards for ${p.name}`;
+          cardPickerFilter.value = '';
+          cardPickerFilter.placeholder = 'Filter by set, number, rarity...';
+          cardPickerGrid.innerHTML = '<div class="card-picker-loading">Loading cards...</div>';
+          cardPickerCount.textContent = '';
+          const result = await fetchCardsForPokemon(p.name);
+          pickerCards = result.cards;
+          if (result.error && pickerCards.length === 0) {
+            cardPickerGrid.innerHTML = `<div class="card-picker-error">Failed to load cards: ${result.error}</div>`;
+            return;
+          }
+          renderPickerCards(pickerCards);
+          requestAnimationFrame(() => {
+            const firstItem = cardPickerGrid.querySelector('.card-picker-item');
+            if (firstItem) firstItem.focus();
+          });
+        });
+        cardPickerGrid.appendChild(item);
+      }
+      return;
+    }
+
+    // Normal card filter mode
+    const ql = q.toLowerCase();
     const filtered = pickerCards.filter(c =>
-      c.setName.toLowerCase().includes(q) || c.number.toLowerCase().includes(q) || c.rarity.toLowerCase().includes(q)
+      c.setName.toLowerCase().includes(ql) || c.number.toLowerCase().includes(ql) || c.rarity.toLowerCase().includes(ql)
     );
     renderPickerCards(filtered);
   }, 150);
