@@ -92,4 +92,24 @@ async function clearExpiredCache() {
   });
 }
 
-export { openDB, getCollection, saveCollection, getCachedCards, cacheCards, clearExpiredCache };
+async function getAllCollections() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(COLLECTIONS_STORE, 'readonly');
+    const req = tx.objectStore(COLLECTIONS_STORE).getAll();
+    req.onsuccess = () => resolve((req.result || []).map(r => ({ id: r.id, name: r.name, type: r.type || 'pokedex' })));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deleteCollection(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(COLLECTIONS_STORE, 'readwrite');
+    const req = tx.objectStore(COLLECTIONS_STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export { openDB, getCollection, saveCollection, deleteCollection, getAllCollections, getCachedCards, cacheCards, clearExpiredCache };

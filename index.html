@@ -17,7 +17,10 @@
   </div>
   <div class="sticky-header">
     <div class="header-row">
-      <h1>POKEDEX TRACKER</h1>
+      <div id="collection-switcher" class="collection-switcher">
+        <h1 id="collection-title" class="collection-title">POKEDEX TRACKER <span class="chevron">&#9660;</span></h1>
+        <div id="collection-dropdown" class="collection-dropdown" hidden></div>
+      </div>
       <div class="header-actions">
         <button id="export-btn" class="btn" title="Export data">Export</button>
         <label class="btn import-label" title="Import data">
@@ -138,6 +141,83 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div id="create-collection-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content create-modal-content">
+      <div class="modal-header">
+        <h2 id="create-modal-title">New Collection</h2>
+        <button id="create-modal-close" class="btn btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">Name</label>
+        <input type="text" id="create-name" class="form-input" placeholder="My Collection">
+        <!-- Step 1: Type selection -->
+        <div id="create-step-1">
+          <label class="form-label">Type</label>
+          <div class="type-grid">
+            <div class="type-card" data-type="pokedex">
+              <div class="type-icon">&#128214;</div>
+              <div class="type-name">Pokedex</div>
+              <div class="type-desc">Collect one card per Pokemon</div>
+            </div>
+            <div class="type-card" data-type="master">
+              <div class="type-icon">&#11088;</div>
+              <div class="type-name">Master Set</div>
+              <div class="type-desc">Complete every card in a set</div>
+            </div>
+            <div class="type-card" data-type="freestyle">
+              <div class="type-icon">&#127912;</div>
+              <div class="type-name">Freestyle</div>
+              <div class="type-desc">Build your own custom binder</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2a: Pokedex config -->
+        <div id="create-step-pokedex" hidden>
+          <label class="form-label">Generations</label>
+          <div id="create-gen-grid" class="gen-grid"></div>
+          <label class="form-label">Page Layout</label>
+          <div id="create-layout-pokedex" class="layout-grid"></div>
+        </div>
+
+        <!-- Step 2b: Master Set config -->
+        <div id="create-step-master" hidden>
+          <label class="form-label">Search Sets</label>
+          <input type="text" id="create-set-search" class="form-input" placeholder="Search by set name...">
+          <div id="create-set-results" class="set-results" hidden></div>
+          <label class="form-label">Selected Sets</label>
+          <div id="create-selected-sets" class="selected-sets"></div>
+          <label class="form-label">Page Layout</label>
+          <div id="create-layout-master" class="layout-grid"></div>
+        </div>
+
+        <!-- Step 2c: Freestyle config -->
+        <div id="create-step-freestyle" hidden>
+          <label class="form-label">Page Layout</label>
+          <div id="create-layout-freestyle" class="layout-grid"></div>
+          <p class="form-hint" style="margin-top:0.5rem;">Starts with 3 pages. Automatically expands as you add cards.</p>
+        </div>
+      </div>
+      <div id="create-progress" class="create-progress" hidden>
+        <div class="create-progress-text">Loading...</div>
+        <div class="progress-bar"><div id="create-progress-bar" class="progress-fill" style="width:0%;transition:width 0.3s;"></div></div>
+      </div>
+      <div class="create-modal-footer">
+        <button id="create-back-btn" class="btn" hidden>&larr; Back</button>
+        <div style="flex:1;"></div>
+        <button id="create-cancel-btn" class="btn">Cancel</button>
+        <button id="create-confirm-btn" class="btn btn-primary" disabled>Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="freestyle-slot-menu" class="slot-context-menu" hidden>
+    <div class="slot-menu-item" data-action="toggle-owned">Mark owned</div>
+    <div class="slot-menu-item" data-action="change-card">Change card</div>
+    <div class="slot-menu-item slot-menu-danger" data-action="remove">Remove</div>
   </div>
 
   <div id="sync-modal" class="modal" hidden>

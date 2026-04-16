@@ -1,5 +1,20 @@
 import { getCachedCards, cacheCards } from './db.js';
 
+const VARIANT_ORDER = ['normal', 'holofoil', '1stEditionNormal', '1stEditionHolofoil', 'reverseHolofoil', 'default'];
+
+const VARIANT_LABELS = {
+  normal: 'Normal',
+  reverseHolofoil: 'Rev. Holo',
+  holofoil: 'Holo',
+  '1stEditionHolofoil': '1st Ed. Holo',
+  '1stEditionNormal': '1st Ed.',
+  default: '',
+};
+
+function getVariantLabel(variant) {
+  return VARIANT_LABELS[variant] || variant;
+}
+
 function parseCard(raw) {
   const num = raw.number || '';
   const setTotal = raw.set ? (raw.set.printedTotal || raw.set.total || '') : '';
@@ -8,6 +23,7 @@ function parseCard(raw) {
     name: raw.name,
     number: setTotal ? `${num}/${setTotal}` : num,
     setName: raw.set ? raw.set.name : '',
+    setId: raw.set ? raw.set.id : '',
     setYear: raw.set && raw.set.releaseDate ? raw.set.releaseDate.slice(0, 4) : '',
     rarity: raw.rarity || '',
     imageSmall: raw.images ? raw.images.small : '',
@@ -36,4 +52,110 @@ async function fetchCardsForPokemon(name, { skipCache = false } = {}) {
   }
 }
 
-export { fetchCardsForPokemon };
+async function fetchSets(query) {
+  try {
+    const q = encodeURIComponent(`name:"*${query}*"`);
+    const url = `https://api.pokemontcg.io/v2/sets?q=${q}&orderBy=-releaseDate&pageSize=20`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    const json = await res.json();
+    return {
+      sets: (json.data || []).map(s => ({
+        id: s.id,
+        name: s.name,
+        releaseDate: s.releaseDate || '',
+        year: s.releaseDate ? s.releaseDate.slice(0, 4) : '',
+        total: s.total || 0,
+        printedTotal: s.printedTotal || 0,
+      })),
+    };
+  } catch (err) {
+    return { sets: [], error: err.message };
+  }
+}
+
+async function fetchSetCards(setId) {
+  const allCards = [];
+  let page = 1;
+  const pageSize = 250;
+
+  try {
+    while (true) {
+      const q = encodeURIComponent(`set.id:${setId}`);
+      const url = `https://api.pokemontcg.io/v2/cards?q=${q}&orderBy=number&pageSize=${pageSize}&page=${page}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const json = await res.json();
+      const cards = json.data || [];
+      allCards.push(...cards);
+      if (allCards.length >= (json.totalCount || 0) || cards.length < pageSize) break;
+      page++;
+    }
+    return { cards: allCards };
+  } catch (err) {
+    return { cards: allCards, error: err.message };
+  }
+}
+
+function expandVariants(rawCards) {
+  const slots = [];
+  for (const raw of rawCards) {
+    const card = parseCard(raw);
+    const prices = raw.tcgplayer && raw.tcgplayer.prices ? raw.tcgplayer.prices : {};
+    const variants = Object.keys(prices);
+
+    if (variants.length === 0) {
+      slots.push({
+        ...card,
+        slotId: `${card.cardId}:default`,
+        variant: 'default',
+        rawNumber: raw.number || '',
+      });
+    } else {
+      // Sort variants by defined order
+      variants.sort((a, b) => {
+        const ai = VARIANT_ORDER.indexOf(a);
+        const bi = VARIANT_ORDER.indexOf(b);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      });
+      for (const variant of variants) {
+        slots.push({
+          ...card,
+          slotId: `${card.cardId}:${variant}`,
+          variant,
+          rawNumber: raw.number || '',
+        });
+      }
+    }
+  }
+
+  // Parse card number into [prefix, numeric] for sorting
+  // "1" → ["", 1], "H1" → ["H", 1], "TG1" → ["TG", 1], "SH5" → ["SH", 5]
+  function parseCardNum(raw) {
+    const match = (raw || '').match(/^([A-Za-z]*)(\d+)$/);
+    if (!match) return [raw || '', 0];
+    return [match[1].toUpperCase(), parseInt(match[2], 10)];
+  }
+
+  // Sort: pure numeric first, then prefixed groups alphabetically, then numeric within group, then variant
+  slots.sort((a, b) => {
+    const [prefA, numA] = parseCardNum(a.rawNumber);
+    const [prefB, numB] = parseCardNum(b.rawNumber);
+    // Pure numeric (empty prefix) sorts before any prefix
+    if (prefA !== prefB) {
+      if (!prefA) return -1;
+      if (!prefB) return 1;
+      return prefA.localeCompare(prefB);
+    }
+    if (numA !== numB) return numA - numB;
+    const vi = (v) => { const i = VARIANT_ORDER.indexOf(v); return i === -1 ? 99 : i; };
+    return vi(a.variant) - vi(b.variant);
+  });
+
+  // Remove rawNumber — only needed for sorting, not storage
+  for (const slot of slots) delete slot.rawNumber;
+
+  return slots;
+}
+
+export { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, getVariantLabel, VARIANT_LABELS };
