@@ -108,8 +108,9 @@ function rebuildBookCollection() {
 }
 
 function renderCurrentView() {
-  if (currentView === 'list' && state.type === 'pokedex') {
-    renderListView(pokemonListEl, collection, state.caught, handleToggleCaught);
+  if (currentView === 'list' && (state.type === 'pokedex' || state.type === 'master')) {
+    const listData = state.type === 'master' ? bookCollection : collection;
+    renderListView(pokemonListEl, listData, state.caught, handleToggleCaught, state.type);
   } else {
     renderBinder();
   }
@@ -178,13 +179,13 @@ function updateTypeAwareControls() {
   formSettingsBtn.hidden = !isPokedex;
   // Books button: pokedex and master only
   bookSettingsBtn.hidden = isFreestyle;
-  // List/Binder toggle: pokedex only
-  viewToggle.hidden = !isPokedex;
+  // List/Binder toggle: pokedex and master
+  viewToggle.hidden = isFreestyle;
   // Book selector: not for freestyle
   bookSelectorEl.hidden = isFreestyle;
 
-  // Force binder view for non-pokedex
-  if (!isPokedex && currentView === 'list') {
+  // Force binder view for freestyle only
+  if (isFreestyle && currentView === 'list') {
     currentView = 'binder';
     listViewEl.hidden = true;
     binderViewEl.hidden = false;
@@ -278,7 +279,7 @@ document.addEventListener('click', (e) => {
 const viewSlider = document.querySelector('.view-toggle .slider');
 
 function switchView(view) {
-  if (state.type !== 'pokedex' && view === 'list') view = 'binder';
+  if (state.type === 'freestyle' && view === 'list') view = 'binder';
   currentView = view;
   listViewEl.hidden = view !== 'list';
   binderViewEl.hidden = view !== 'binder';

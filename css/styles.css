@@ -1066,6 +1066,19 @@ main {
 }
 .freestyle-empty-icon { font-size: 1.3rem; opacity: 0.3; }
 
+/* ---- Master Set List View ---- */
+.list-set-header {
+  grid-column: 1 / -1;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  color: var(--caught-border);
+  letter-spacing: 1px;
+  padding: 0.6rem 0.4rem 0.2rem;
+  border-bottom: 1px solid var(--border);
+}
+.pokemon-row.want { opacity: 0.5; }
+.pokemon-row.want .pokemon-dot { background: var(--border); }
+
 .slot-variant-label {
   font-size: 0.5rem; color: var(--text-muted); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
