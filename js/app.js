@@ -390,13 +390,15 @@ collectionTitle.addEventListener('click', async (e) => {
       const c = collections.find(c => c.id === id);
       const newName = prompt('Rename collection:', c?.name || '');
       if (!newName || !newName.trim()) return;
-      const record = await (await import('./db.js')).getCollection(id);
-      if (record) {
-        record.name = newName.trim();
-        await saveCollection(record);
-        if (id === activeId) {
-          state.collectionName = newName.trim();
-          updateTypeAwareControls();
+      if (id === activeId) {
+        state.collectionName = newName.trim();
+        await saveState(state);
+        updateTypeAwareControls();
+      } else {
+        const record = await (await import('./db.js')).getCollection(id);
+        if (record) {
+          record.name = newName.trim();
+          await saveCollection(record);
         }
       }
       closeCollectionDropdown();
