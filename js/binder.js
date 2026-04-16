@@ -112,6 +112,7 @@ function buildMasterSlot(slot, p, isCaught, onToggle) {
       <span class="dex-num">${isCaught ? '&#10003;' : ''}</span>
     </div>
     <img class="slot-card-img" src="${p.imageSmall}" alt="${p.name}" loading="lazy"${!isCaught ? ' style="filter:grayscale(1);opacity:0.4;"' : ''}>
+    <div class="slot-card-label">${p.setName || ''}</div>
   `;
 
   slot.addEventListener('click', () => onToggle(p.formId));

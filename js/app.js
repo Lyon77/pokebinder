@@ -699,7 +699,7 @@ createConfirmBtn.addEventListener('click', async () => {
         await yield_();
       }
       record.slotList = allSlots;
-      record.books = createSets.map(s => ({ sets: [s.id], name: s.name }));
+      record.books = createSets.map((s, i) => ({ sets: [s.id], name: `Book ${i + 1}` }));
       createProgressText.textContent = `${allSlots.length} total slots ready`;
       createProgressBar.style.width = '40%';
       await yield_();
