@@ -85,8 +85,12 @@ function buildBookCollection(fullCollection, book, collectionType) {
   let filtered;
 
   if (collectionType === 'master') {
-    const setIds = new Set(book.sets || []);
-    filtered = fullCollection.filter(p => setIds.has(p.setId));
+    const bookSets = book.sets || [];
+    const setIds = new Set(bookSets);
+    const matching = fullCollection.filter(p => setIds.has(p.setId));
+    // Sort by the order sets appear in the book
+    const setOrder = new Map(bookSets.map((id, i) => [id, i]));
+    filtered = matching.sort((a, b) => (setOrder.get(a.setId) || 0) - (setOrder.get(b.setId) || 0));
   } else if (collectionType === 'freestyle') {
     // Freestyle has no books — return full collection
     filtered = fullCollection;
