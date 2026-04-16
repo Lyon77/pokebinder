@@ -1,59 +1,46 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: User can create named books
-The system SHALL allow the user to create named books, each assigned a set of generations. A book groups Pokemon from its assigned generations into a separate binder.
+The system SHALL allow the user to create named books. For Pokedex collections, each book is assigned a set of generations. For Master Set collections, each book is assigned a set of TCG set IDs. A book groups slots from its assigned sources into a separate binder section.
 
-#### Scenario: Create a book
-- **WHEN** the user adds a new book named "Kanto & Johto" with generations 1 and 2
-- **THEN** the book SHALL appear in the book selector and contain all Pokemon from Gen I and Gen II (including active alternate forms)
+#### Scenario: Create a Pokedex book
+- **WHEN** the user adds a new book named "Kanto & Johto" with generations 1 and 2 in a Pokedex collection
+- **THEN** the book SHALL appear in the book selector and contain all Pokemon from Gen I and Gen II
+
+#### Scenario: Create a Master Set book
+- **WHEN** the user adds a new book named "Crown Zenith" with set "swsh12pt5" in a Master Set collection
+- **THEN** the book SHALL contain all card variant slots from that set
 
 #### Scenario: Book name
 - **WHEN** the user creates a book
 - **THEN** the user SHALL provide a name for the book (free text)
 
-### Requirement: All generations must be assigned to a book
-The system SHALL enforce that every generation (1–9) is assigned to exactly one book. The book settings UI SHALL show which generations are unassigned and prevent saving until all are assigned.
+### Requirement: All sources must be assigned to a book
+The system SHALL enforce that every generation (for Pokedex) or every set (for Master Set) is assigned to exactly one book. The book settings UI SHALL show which sources are unassigned.
 
 #### Scenario: Unassigned generation warning
-- **WHEN** the user has not assigned Gen V to any book
-- **THEN** the book settings SHALL indicate Gen V is unassigned and not allow the configuration to be saved
+- **WHEN** the user has not assigned Gen V to any book in a Pokedex collection
+- **THEN** the book settings SHALL indicate Gen V is unassigned
 
-#### Scenario: Generation cannot be in multiple books
+#### Scenario: Unassigned set warning
+- **WHEN** the user has not assigned "Crown Zenith" to any book in a Master Set collection
+- **THEN** the book settings SHALL indicate it is unassigned
+
+#### Scenario: Source cannot be in multiple books
 - **WHEN** Gen I is already assigned to "Book 1"
 - **THEN** Gen I SHALL NOT be available for assignment to another book
 
-### Requirement: User can edit and delete books
-The system SHALL allow the user to rename books, change their generation assignments, and delete books.
+### Requirement: Book settings adapts to collection type
+The book settings modal SHALL detect the active collection's type and display the appropriate source chips. Pokedex shows generation chips (Gen I through Gen IX, filtered to collection's selected generations). Master Set shows TCG set chips (based on collection's selected sets). Freestyle collections SHALL NOT have book settings.
 
-#### Scenario: Edit a book
-- **WHEN** the user changes "Book 1" generations from [1, 2] to [1, 2, 3]
-- **THEN** the binder view for "Book 1" SHALL update to include Gen III Pokemon
+#### Scenario: Pokedex book settings
+- **WHEN** the user opens book settings for a Pokedex collection with generations [1, 2, 3]
+- **THEN** the modal shows draggable chips for Gen I, Gen II, Gen III
 
-#### Scenario: Delete a book
-- **WHEN** the user deletes a book
-- **THEN** its generations become unassigned and must be reassigned to other books before saving
+#### Scenario: Master Set book settings
+- **WHEN** the user opens book settings for a Master Set collection with sets ["swsh12pt5", "sv3pt5"]
+- **THEN** the modal shows draggable chips for "Crown Zenith" and "Pokemon 151"
 
-### Requirement: Default book for new users
-The system SHALL create a default book named "All Pokemon" containing all generations (1–9) when no book configuration exists in localStorage.
-
-#### Scenario: First load
-- **WHEN** the application loads with no saved book configuration
-- **THEN** a single book named "All Pokemon" with generations [1,2,3,4,5,6,7,8,9] SHALL be created
-
-### Requirement: Book configuration persists
-The system SHALL save book configuration (names and generation assignments) in localStorage.
-
-#### Scenario: Books survive reload
-- **WHEN** the user configures books and reloads the page
-- **THEN** the book configuration SHALL be restored
-
-### Requirement: Book configuration included in export/import
-The system's export/import SHALL include book configuration alongside caught state and form preferences.
-
-#### Scenario: Export includes books
-- **WHEN** the user exports data
-- **THEN** the exported JSON SHALL include the books array
-
-#### Scenario: Import restores books
-- **WHEN** the user imports a backup with book configuration
-- **THEN** the books SHALL be restored
+#### Scenario: Freestyle hides book settings
+- **WHEN** the active collection is Freestyle
+- **THEN** the Books button is hidden or disabled
