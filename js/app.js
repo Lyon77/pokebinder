@@ -1513,6 +1513,14 @@ cardPickerGrid.addEventListener('keydown', (e) => {
   }
 });
 
+cardPickerFilter.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const firstItem = cardPickerGrid.querySelector('.card-picker-item');
+    if (firstItem) firstItem.focus();
+  }
+});
+
 cardPickerFilter.addEventListener('input', () => {
   clearTimeout(pickerFilterTimer);
   pickerFilterTimer = setTimeout(async () => {
