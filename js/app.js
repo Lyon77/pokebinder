@@ -824,7 +824,13 @@ function renderFormSettings() {
   disableAllBtn.addEventListener('click', () => {
     const allCats = getFormCategories();
     const subCats = getFormSubCategories();
-    for (const cat of allCats) state.disabledCategories.add(cat);
+    // 'other' has no top-level toggle in the UI, so adding it would strand
+    // users — re-enabling a subcategory or individual form wouldn't bring
+    // it back. Subcategory + misc-form disables already cover 'other'.
+    for (const cat of allCats) {
+      if (cat === 'other') continue;
+      state.disabledCategories.add(cat);
+    }
     for (const [subKey] of subCats) state.disabledCategories.add(subKey);
     const miscForms = getOtherFormsWithoutSubCategory();
     for (const f of miscForms) state.excludedForms.add(f.formId);
