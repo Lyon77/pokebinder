@@ -1,11 +1,14 @@
 const SYNC_PAT_KEY = 'pokebinder-sync-pat';
 const SYNC_GIST_KEY = 'pokebinder-sync-gist-id';
+const SAVE_DEBOUNCE_MS = 5000;
 
 let syncPat = localStorage.getItem(SYNC_PAT_KEY) || '';
 let syncGistId = localStorage.getItem(SYNC_GIST_KEY) || '';
 let saveTimer = null;
 let pollTimer = null;
-let lastSavedJson = null;
+let lastSavedJson = null;   // content of the last successful push (or baseline from remote)
+let pendingJson = null;     // content of the queued/in-flight save; cleared on success
+let rateLimitResetAt = 0;   // unix ms; don't PATCH before this (GitHub gist_update: 100/hr)
 let onSyncStatus = null;
 let onRemoteChange = null;
 
@@ -81,8 +84,14 @@ async function loadFromGist() {
   }
 }
 
-async function saveToGist(stateData) {
+async function saveToGist(serialized) {
   if (!isSyncConfigured()) return;
+  saveTimer = null;
+  if (Date.now() < rateLimitResetAt) {
+    scheduleRateLimitRetry();
+    emitRateLimitStatus();
+    return;
+  }
   emitStatus('saving', 'Saving...');
   try {
     const res = await fetch(`https://api.github.com/gists/${syncGistId}`, {
@@ -95,17 +104,26 @@ async function saveToGist(stateData) {
       body: JSON.stringify({
         files: {
           'collection.json': {
-            content: JSON.stringify(stateData, null, 2),
+            content: serialized,
           },
         },
       }),
     });
     if (!res.ok) {
+      if (res.status === 403 && res.headers.get('x-ratelimit-remaining') === '0') {
+        const resetUnix = parseInt(res.headers.get('x-ratelimit-reset'), 10);
+        if (!Number.isNaN(resetUnix)) rateLimitResetAt = resetUnix * 1000;
+        scheduleRateLimitRetry();
+        emitRateLimitStatus();
+        return;
+      }
       throw new Error(`GitHub API error: ${res.status}`);
     }
-    lastSavedJson = JSON.stringify(stateData, null, 2);
+    lastSavedJson = serialized;
+    if (pendingJson === serialized) pendingJson = null;
     emitStatus('synced', 'Synced');
   } catch (err) {
+    if (pendingJson === serialized) pendingJson = null;
     emitStatus('error', 'Save failed');
     console.error('Gist save failed:', err);
   }
@@ -113,16 +131,34 @@ async function saveToGist(stateData) {
 
 function scheduleSave(stateData) {
   if (!isSyncConfigured()) return;
+  const serialized = JSON.stringify(stateData, null, 2);
+  // Skip if content matches the latest queued or confirmed-pushed state
+  const effectiveLatest = pendingJson !== null ? pendingJson : lastSavedJson;
+  if (serialized === effectiveLatest) return;
   clearTimeout(saveTimer);
-  // Update lastSavedJson immediately so polls don't overwrite with stale remote data
-  lastSavedJson = JSON.stringify(stateData, null, 2);
-  saveTimer = setTimeout(() => saveToGist(stateData), 2000);
+  pendingJson = serialized;
+  saveTimer = setTimeout(() => {
+    if (pendingJson !== null) saveToGist(pendingJson);
+  }, SAVE_DEBOUNCE_MS);
+}
+
+function scheduleRateLimitRetry() {
+  clearTimeout(saveTimer);
+  const delay = Math.max(1000, rateLimitResetAt - Date.now() + 2000);
+  saveTimer = setTimeout(() => {
+    if (pendingJson !== null) saveToGist(pendingJson);
+  }, delay);
+}
+
+function emitRateLimitStatus() {
+  const mins = Math.max(1, Math.ceil((rateLimitResetAt - Date.now()) / 60000));
+  emitStatus('error', `Rate limited — retry in ${mins}m`);
 }
 
 async function pollForChanges() {
   if (!isSyncConfigured()) return;
-  // Skip pull if there's a pending local save waiting to push
-  if (saveTimer) return;
+  // Skip pull if there's a pending/in-flight local save — don't clobber unsaved state
+  if (saveTimer || pendingJson !== null) return;
   emitStatus('loading', 'Checking...');
   try {
     const res = await fetch(`https://api.github.com/gists/${syncGistId}`, {
@@ -169,11 +205,13 @@ function stopPolling() {
 
 function setLastSavedJson(data) {
   lastSavedJson = JSON.stringify(data, null, 2);
+  pendingJson = null;
 }
 
 function cancelPendingSave() {
   clearTimeout(saveTimer);
   saveTimer = null;
+  pendingJson = null;
 }
 
 export {
