@@ -1431,10 +1431,18 @@ for (const input of pickerIntentInputs) {
       next.checked = true;
       pickerOwnedIntent = (next.value === 'owned');
       next.focus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation();
+      cardPickerSave.focus();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
-      cardPickerSave.click();
+      // Enter on the radio just selects that option; the radio is already
+      // updated via its `change` event. Don't save — user must focus
+      // Clear/Save to commit.
+      input.checked = true;
+      pickerOwnedIntent = (input.value === 'owned');
     }
   });
 }
@@ -1481,6 +1489,13 @@ document.addEventListener('keydown', (e) => {
     const focused = document.activeElement;
     if (focused && focused.classList.contains('card-picker-item')) return;
     if (focused === cardPickerFilter) return;
+    // If a button or radio is focused, let the browser's default Enter handling
+    // activate that specific element. Only fall back to Save when focus is
+    // nowhere meaningful.
+    if (focused === cardPickerSave || focused === cardPickerClear
+        || focused === cardPickerBack || focused === cardPickerClose
+        || focused === cardPickerRefresh) return;
+    if (focused && focused.tagName === 'INPUT' && focused.type === 'radio') return;
     e.preventDefault();
     cardPickerSave.click();
   }
@@ -1549,6 +1564,30 @@ cardPickerClear.addEventListener('click', () => {
   restorePickerFocus();
 });
 
+function onActionButtonKeydown(e) {
+  const isSave = e.currentTarget === cardPickerSave;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    e.stopPropagation();
+    (isSave ? cardPickerClear : cardPickerSave).focus();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    e.stopPropagation();
+    // Jump back to the currently-checked intent radio (freestyle), or
+    // the selected card if no intent is showing.
+    if (!pickerIntentEl.hidden) {
+      const checked = pickerIntentEl.querySelector('input[type="radio"]:checked');
+      (checked || pickerIntentInputs[0]).focus();
+    } else {
+      const selected = cardPickerGrid.querySelector('.card-picker-item.selected');
+      const items = cardPickerGrid.querySelectorAll('.card-picker-item');
+      (selected || items[items.length - 1])?.focus();
+    }
+  }
+}
+cardPickerSave.addEventListener('keydown', onActionButtonKeydown);
+cardPickerClear.addEventListener('keydown', onActionButtonKeydown);
+
 cardPickerRefresh.addEventListener('click', async () => {
   if (!pickerCurrentName) return;
   cardPickerRefresh.disabled = true;
@@ -1595,8 +1634,13 @@ cardPickerGrid.addEventListener('keydown', (e) => {
       focused.click(); // select Pokemon in search mode
       return;
     }
-    // If this card isn't selected yet, select it then save
-    // If already selected, just save
+    if (state.type === 'freestyle') {
+      // Freestyle: Enter just toggles card selection. User then uses
+      // arrow keys to reach Save/Clear and commits explicitly.
+      focused.click();
+      return;
+    }
+    // Pokedex: Enter selects the card (if not already) and saves.
     if (!focused.classList.contains('selected')) {
       focused.click();
     }
