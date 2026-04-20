@@ -92,6 +92,16 @@ async function clearExpiredCache() {
   });
 }
 
+async function clearAllTcgCache() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(TCG_CACHE_STORE, 'readwrite');
+    const req = tx.objectStore(TCG_CACHE_STORE).clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 async function getAllCollections() {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -144,5 +154,5 @@ export {
   openDB,
   getCollection, saveCollection, deleteCollection,
   getAllCollections, getAllCollectionsFull,
-  getCachedCards, getAllCachedCards, cacheCards, clearExpiredCache,
+  getCachedCards, getAllCachedCards, cacheCards, clearExpiredCache, clearAllTcgCache,
 };

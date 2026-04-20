@@ -187,16 +187,14 @@ async function hydrateCards(cardIds) {
       const res = await fetch(url);
       if (!res.ok) continue;
       const json = await res.json();
-      const byPokemon = new Map();
       for (const raw of (json.data || [])) {
         const card = parseCard(raw);
         result.set(card.cardId, card);
-        if (!byPokemon.has(card.name)) byPokemon.set(card.name, []);
-        byPokemon.get(card.name).push(card);
       }
-      for (const [pokemonName, cards] of byPokemon) {
-        try { await cacheCards(pokemonName, cards); } catch { /* ignore cache write errors */ }
-      }
+      // NOTE: we intentionally do NOT write these into the pokemon-name
+      // TCG cache. That cache holds the "all cards for this Pokemon" list
+      // populated by fetchCardsForPokemon; writing partial id-hydrated
+      // results here would poison it with a subset of cards.
     } catch { /* ignore batch errors; remaining cards stay unhydrated */ }
   }
 

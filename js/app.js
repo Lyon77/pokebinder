@@ -25,7 +25,7 @@ import {
   loadFromGist, cancelPendingSave, startPolling, stopPolling,
 } from './sync.js';
 import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, hydrateCards } from './tcg-api.js';
-import { getAllCollections, getAllCollectionsFull } from './db.js';
+import { getAllCollections, getAllCollectionsFull, clearAllTcgCache } from './db.js';
 
 // ---- View State ----
 const VIEW_STATE_KEY = 'pokebinder-view-state';
@@ -2010,9 +2010,20 @@ function cleanupLegacyStorage() {
   for (const key of keysToRemove) localStorage.removeItem(key);
 }
 
+// One-shot cache wipe: a previous build of hydrateCards polluted the
+// Pokemon-name-keyed TCG cache with subset results (single cards).
+// Running this once ensures users on any poisoned cache get a clean slate.
+const TCG_CACHE_RESET_KEY = 'pokebinder-tcg-cache-reset-v1';
+async function maybeResetTcgCache() {
+  if (localStorage.getItem(TCG_CACHE_RESET_KEY)) return;
+  try { await clearAllTcgCache(); } catch { /* ignore */ }
+  localStorage.setItem(TCG_CACHE_RESET_KEY, String(Date.now()));
+}
+
 // ---- Init ----
 async function init() {
   cleanupLegacyStorage();
+  await maybeResetTcgCache();
   state = await loadState();
   await loadPokemonData();
 
