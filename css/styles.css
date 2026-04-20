@@ -1162,17 +1162,3 @@ main {
 }
 .binder-slot.caught .slot-variant-label { color: var(--caught-border); opacity: 0.7; }
 
-/* ---- Freestyle Slot Context Menu ---- */
-.slot-context-menu {
-  position: fixed; z-index: 300; background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 150px;
-}
-.slot-context-menu[hidden] { display: none; }
-.slot-menu-item {
-  padding: 0.5rem 0.75rem; font-size: 0.75rem; cursor: pointer;
-  border-bottom: 1px solid var(--border); transition: background 0.1s;
-}
-.slot-menu-item:last-child { border-bottom: none; }
-.slot-menu-item:hover { background: var(--surface-alt); }
-.slot-menu-danger { color: var(--accent); }
-.slot-menu-danger:hover { background: var(--accent); color: #fff; }

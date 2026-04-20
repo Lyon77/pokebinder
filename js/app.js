@@ -226,55 +226,12 @@ function handleSlotClick(slotId, name, event) {
   if (state.type === 'master') {
     handleToggleCaught(slotId);
   } else if (state.type === 'freestyle') {
-    const slot = collection.find(s => s.formId === slotId);
-    if (slot && slot.isEmpty) {
-      openCardPicker(slotId, '');
-    } else {
-      openFreestyleMenu(slotId, event);
-    }
+    // Empty slot → pokemon-search mode; filled slot → cards mode for that pokemon.
+    openCardPicker(slotId, name || '');
   } else {
     openCardPicker(slotId, name);
   }
 }
-
-// ---- Freestyle context menu ----
-
-const freestyleMenu = document.getElementById('freestyle-slot-menu');
-let freestyleMenuSlotId = null;
-
-function openFreestyleMenu(slotId, event) {
-  freestyleMenuSlotId = slotId;
-  freestyleMenu.hidden = false;
-  const rect = event && event.target ? event.target.closest('.binder-slot').getBoundingClientRect() : { left: 100, top: 100 };
-  freestyleMenu.style.left = `${Math.min(rect.left, window.innerWidth - 170)}px`;
-  freestyleMenu.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - 120)}px`;
-}
-
-function closeFreestyleMenu() {
-  freestyleMenu.hidden = true;
-  freestyleMenuSlotId = null;
-}
-
-freestyleMenu.addEventListener('click', (e) => {
-  const action = e.target.dataset.action;
-  if (!action || !freestyleMenuSlotId) return;
-  const idx = parseInt(freestyleMenuSlotId, 10);
-
-  if (action === 'change-card') {
-    const existing = state.slots && state.slots[idx];
-    openCardPicker(freestyleMenuSlotId, (existing && existing.name) || '');
-  } else if (action === 'remove') {
-    clearFreestyleSlot(state, idx);
-    rebuildCollection();
-  }
-  closeFreestyleMenu();
-});
-
-document.addEventListener('click', (e) => {
-  if (!freestyleMenu.hidden && !freestyleMenu.contains(e.target)) {
-    closeFreestyleMenu();
-  }
-});
 
 // ---- View switching ----
 
