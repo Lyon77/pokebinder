@@ -1552,6 +1552,7 @@ cardPickerGrid.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowUp') { e.preventDefault(); const prev = idx - cols; if (prev >= 0) items[prev].focus(); }
   else if (e.key === 'Enter') {
     e.preventDefault();
+    e.stopPropagation(); // prevent document-level Enter handler from also firing
     if (pickerMode !== 'cards') {
       focused.click(); // select Pokemon in search mode
       return;
