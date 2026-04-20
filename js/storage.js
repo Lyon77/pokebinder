@@ -381,17 +381,33 @@ async function deleteCollectionRecord(id) {
   await pushBundle(null);
 }
 
-async function reconcileBundleToIDB(rehydratedRecords) {
+// Reconcile the pulled bundle with IndexedDB.
+// - `mode: "union"` (safer, used for initial load / page refresh): upsert
+//   every remote collection, but PRESERVE any local collections not in
+//   the bundle. This avoids wiping collections the user just created
+//   locally that haven't been pushed yet. Returns `true` if any local
+//   collection was missing from the bundle, so the caller can schedule
+//   a follow-up push to get the remote back in sync.
+// - `mode: "reconcile"` (used for live polls, where a missing collection
+//   genuinely means another device deleted it): upsert remote AND delete
+//   local collections not in the bundle.
+async function reconcileBundleToIDB(rehydratedRecords, mode = 'reconcile') {
   const existing = await getAllCollectionsFull();
   const incomingIds = new Set(rehydratedRecords.map(r => r.id));
   for (const rec of rehydratedRecords) {
     await saveCollection(rec);
   }
+  let hadLocalOnly = false;
   for (const local of existing) {
     if (!incomingIds.has(local.id)) {
-      await deleteCollection(local.id);
+      if (mode === 'union') {
+        hadLocalOnly = true;
+      } else {
+        await deleteCollection(local.id);
+      }
     }
   }
+  return hadLocalOnly;
 }
 
 // --- Mutations ---

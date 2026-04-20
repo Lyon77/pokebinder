@@ -1938,7 +1938,7 @@ function showSyncIndicator(status, message) {
 
 setStatusCallback(showSyncIndicator);
 
-async function handleRemoteData(raw) {
+async function handleRemoteData(raw, { mode = 'reconcile' } = {}) {
   if (!raw || typeof raw !== 'object') return false;
   let bundle = parseBundle(raw);
   let needsMigrationPush = false;
@@ -1950,18 +1950,22 @@ async function handleRemoteData(raw) {
   if (!bundle) return false;
 
   const rehydrated = await rehydrateBundle(bundle.collections);
-  await reconcileBundleToIDB(rehydrated);
+  const hadLocalOnly = await reconcileBundleToIDB(rehydrated, mode);
+  // If we kept local-only collections during union, schedule a push so the
+  // remote catches up. This prevents a situation where a locally-created
+  // collection gets silently lost because the gist still had an older bundle.
+  if (mode === 'union' && hadLocalOnly) needsMigrationPush = true;
 
   if (bundle.settings && bundle.settings.binderFlow) {
     saveSettings({ binderFlow: bundle.settings.binderFlow });
   }
 
   const localActiveId = getActiveCollectionId();
-  const availableIds = new Set(rehydrated.map(r => r.id));
-  if (!availableIds.has(localActiveId)) {
+  const availableIdsAfter = new Set((await getAllCollectionsFull()).map(r => r.id));
+  if (!availableIdsAfter.has(localActiveId)) {
     let nextId;
-    if (bundle.activeId && availableIds.has(bundle.activeId)) nextId = bundle.activeId;
-    else if (rehydrated.length > 0) nextId = rehydrated[0].id;
+    if (bundle.activeId && availableIdsAfter.has(bundle.activeId)) nextId = bundle.activeId;
+    else if (availableIdsAfter.size > 0) nextId = availableIdsAfter.values().next().value;
     else nextId = 'living-dex';
     setActiveCollectionId(nextId);
   }
@@ -2008,7 +2012,9 @@ syncSaveBtn.addEventListener('click', async () => {
   try {
     const gist = await loadFromGist();
     if (gist && gist.data) {
-      const result = await handleRemoteData(gist.data);
+      // First connection: union so local collections survive even if the
+      // remote gist is older or has fewer collections.
+      const result = await handleRemoteData(gist.data, { mode: 'union' });
       if (result && result.handled) {
         setLastSavedJson(gist.raw);
         if (result.needsMigrationPush) await pushBundle(state);
@@ -2075,7 +2081,11 @@ async function init() {
     try {
       const gist = await loadFromGist();
       if (gist && gist.data) {
-        const result = await handleRemoteData(gist.data);
+        // Page load: use union mode so collections created locally but
+        // not yet pushed to the gist (e.g., created just before a
+        // refresh) are preserved and pushed to the remote instead of
+        // being wiped by an older bundle.
+        const result = await handleRemoteData(gist.data, { mode: 'union' });
         if (result && result.handled) {
           setLastSavedJson(gist.raw);
           if (result.needsMigrationPush) await pushBundle(state);
@@ -2106,8 +2116,10 @@ document.addEventListener('visibilitychange', async () => {
     try {
       const gist = await loadFromGist();
       if (gist && gist.data) {
-        cancelPendingSave();
-        const result = await handleRemoteData(gist.data);
+        // Don't cancelPendingSave here — if the user has local changes
+        // queued, those must still go out. Use union so a stale remote
+        // doesn't wipe fresh local collections.
+        const result = await handleRemoteData(gist.data, { mode: 'union' });
         if (result && result.handled) {
           setLastSavedJson(gist.raw);
           if (result.needsMigrationPush) await pushBundle(state);
