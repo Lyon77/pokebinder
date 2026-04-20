@@ -123,8 +123,9 @@
   <div id="card-picker-modal" class="modal" hidden>
     <div class="modal-backdrop"></div>
     <div class="modal-content card-picker-content">
-      <div class="modal-header">
-        <h2>Cards for <span id="card-picker-name"></span></h2>
+      <div class="modal-header card-picker-header">
+        <button id="card-picker-back" class="btn card-picker-back" hidden>&larr; Back</button>
+        <h2><span id="card-picker-name"></span></h2>
         <button id="card-picker-close" class="btn btn-close">&times;</button>
       </div>
       <div class="card-search-bar">
@@ -133,6 +134,18 @@
         <button id="card-picker-refresh" class="btn btn-small" title="Refresh cards from API">&#8635;</button>
       </div>
       <div id="card-picker-grid" class="card-picker-grid"></div>
+      <div id="picker-intent" class="picker-intent" hidden>
+        <label class="picker-intent-option">
+          <input type="radio" name="picker-intent" value="want" checked>
+          <span class="picker-intent-label">Placeholder</span>
+          <span class="picker-intent-desc">I want this card</span>
+        </label>
+        <label class="picker-intent-option">
+          <input type="radio" name="picker-intent" value="owned">
+          <span class="picker-intent-label">Owned</span>
+          <span class="picker-intent-desc">I have this card</span>
+        </label>
+      </div>
       <div class="card-picker-footer">
         <span id="card-picker-selected" class="card-picker-selected-info"></span>
         <div class="card-picker-actions">
@@ -215,7 +228,6 @@
   </div>
 
   <div id="freestyle-slot-menu" class="slot-context-menu" hidden>
-    <div class="slot-menu-item" data-action="toggle-owned">Mark owned</div>
     <div class="slot-menu-item" data-action="change-card">Change card</div>
     <div class="slot-menu-item slot-menu-danger" data-action="remove">Remove</div>
   </div>

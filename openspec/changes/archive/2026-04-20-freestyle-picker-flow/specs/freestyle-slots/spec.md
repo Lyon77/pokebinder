@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Freestyle empty slot interaction
 Clicking an empty Freestyle slot SHALL open the card picker in Pokemon-search mode, allowing the user to search for any Pokemon, select a card, and choose whether the card is owned or a placeholder (want) before saving.
@@ -48,6 +48,8 @@ A Freestyle collection SHALL have a fixed number of pages determined at creation
 - **WHEN** a Freestyle collection is created with 10 pages and 3x3 layout
 - **THEN** the collection has 90 slots (10 * 9)
 
+## ADDED Requirements
+
 ### Requirement: Freestyle card picker owned/want selector
 When the active collection is Freestyle, the card picker SHALL display a Want/Owned radio selector that appears whenever a card is selected. The selector's initial value SHALL be "Placeholder" for a new slot and SHALL reflect the slot's current caught state when editing a filled slot. Saving the picker SHALL apply both the card assignment and the caught state atomically.
 
@@ -96,3 +98,15 @@ When the Freestyle card picker is in cards mode, the picker header SHALL display
 #### Scenario: Back hidden in Pokemon-search mode
 - **WHEN** the picker is in Pokemon-search mode
 - **THEN** the Back button is not visible
+
+## REMOVED Requirements
+
+### Requirement: Mark as owned via slot menu
+**Reason**: Replaced by the Want/Owned radio selector in the card picker. Flipping owned/want is now expressed during the card-picker save flow instead of the slot context menu.
+
+**Migration**: No data migration needed. Users who previously flipped state via the slot menu now do so via "Change card" → radio → Save.
+
+### Requirement: Toggle owned back to want via slot menu
+**Reason**: Replaced by the Want/Owned radio selector in the card picker. The slot context menu no longer carries an owned/want toggle.
+
+**Migration**: No data migration needed.

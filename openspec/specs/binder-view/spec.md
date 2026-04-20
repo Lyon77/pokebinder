@@ -32,7 +32,7 @@ The click handler on binder slots SHALL vary based on the active collection's ty
 
 #### Scenario: Freestyle filled slot click
 - **WHEN** the user clicks a filled Freestyle slot
-- **THEN** a context menu or action sheet appears with options: toggle owned/want, change card, remove card
+- **THEN** a context menu appears with two options: "Change card" and "Remove". Flipping owned/want is handled inside the card picker (via the Want/Owned radio), not the slot menu.
 
 ### Requirement: Type-specific controls visibility
 Certain binder controls SHALL be shown or hidden based on the collection type. The Forms button and list view SHALL only appear for Pokedex collections. The Books button SHALL appear for Pokedex and Master Set but not Freestyle.
