@@ -181,16 +181,23 @@ function updateTypeAwareControls() {
   formSettingsBtn.hidden = !isPokedex;
   // Books button: pokedex and master only
   bookSettingsBtn.hidden = isFreestyle;
-  // List/Binder toggle: pokedex and master
-  viewToggle.hidden = isFreestyle;
+  // List/Binder toggle: always visible, but list button is disabled for freestyle
+  viewToggle.hidden = false;
+  viewListBtn.disabled = isFreestyle;
+  viewListBtn.title = isFreestyle ? 'List view is not available for Freestyle collections' : '';
   // Book selector: not for freestyle
   bookSelectorEl.hidden = isFreestyle;
 
-  // Force binder view for freestyle only
-  if (isFreestyle && currentView === 'list') {
-    currentView = 'binder';
+  // Force binder view for freestyle (no list view)
+  if (isFreestyle) {
+    if (currentView === 'list') {
+      currentView = 'binder';
+    }
     listViewEl.hidden = true;
     binderViewEl.hidden = false;
+    viewListBtn.classList.remove('active');
+    viewBinderBtn.classList.add('active');
+    viewSlider.classList.add('right');
   }
 
   // Update header title
@@ -1496,6 +1503,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 cardPickerSave.addEventListener('click', () => {
+  // Pokemon-search mode has no selection to save — ignore any stray invocations.
+  if (pickerMode === 'pokemon-search') return;
   if (!pickerFormId) { closeCardPicker(); return; }
 
   if (state.type === 'freestyle') {

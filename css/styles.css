@@ -114,6 +114,8 @@ main {
 }
 .btn-view:hover { background: transparent; color: var(--text); }
 .btn-view.active { color: #fff; background: transparent; border-color: transparent; }
+.btn-view:disabled { color: var(--text-muted); opacity: 0.4; cursor: not-allowed; }
+.btn-view:disabled:hover { color: var(--text-muted); }
 .btn-close {
   background: none;
   border: none;
