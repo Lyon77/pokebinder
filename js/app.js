@@ -1410,6 +1410,33 @@ for (const input of pickerIntentInputs) {
   input.addEventListener('change', () => {
     if (input.checked) pickerOwnedIntent = (input.value === 'owned');
   });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      // Jump back to the currently selected card, or the last card in the grid
+      const selected = cardPickerGrid.querySelector('.card-picker-item.selected');
+      const items = cardPickerGrid.querySelectorAll('.card-picker-item');
+      const target = selected || items[items.length - 1];
+      if (target) target.focus();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      e.stopPropagation();
+      const inputs = [...pickerIntentInputs];
+      const curIdx = inputs.indexOf(input);
+      const nextIdx = e.key === 'ArrowRight'
+        ? Math.min(inputs.length - 1, curIdx + 1)
+        : Math.max(0, curIdx - 1);
+      const next = inputs[nextIdx];
+      next.checked = true;
+      pickerOwnedIntent = (next.value === 'owned');
+      next.focus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      cardPickerSave.click();
+    }
+  });
 }
 
 function restorePickerFocus() {
@@ -1548,7 +1575,18 @@ cardPickerGrid.addEventListener('keydown', (e) => {
 
   if (e.key === 'ArrowRight') { e.preventDefault(); if (idx + 1 < items.length) items[idx + 1].focus(); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); if (idx - 1 >= 0) items[idx - 1].focus(); }
-  else if (e.key === 'ArrowDown') { e.preventDefault(); const next = idx + cols; if (next < items.length) items[next].focus(); }
+  else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const next = idx + cols;
+    if (next < items.length) {
+      items[next].focus();
+    } else if (!pickerIntentEl.hidden) {
+      // At the bottom row: jump to the intent radio group so the user can
+      // change Placeholder/Owned via keyboard.
+      const checked = pickerIntentEl.querySelector('input[type="radio"]:checked');
+      (checked || pickerIntentInputs[0]).focus();
+    }
+  }
   else if (e.key === 'ArrowUp') { e.preventDefault(); const prev = idx - cols; if (prev >= 0) items[prev].focus(); }
   else if (e.key === 'Enter') {
     e.preventDefault();
