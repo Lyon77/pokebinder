@@ -102,6 +102,34 @@ async function getAllCollections() {
   });
 }
 
+async function getAllCollectionsFull() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(COLLECTIONS_STORE, 'readonly');
+    const req = tx.objectStore(COLLECTIONS_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getAllCachedCards() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(TCG_CACHE_STORE, 'readonly');
+    const req = tx.objectStore(TCG_CACHE_STORE).getAll();
+    req.onsuccess = () => {
+      const out = [];
+      const now = Date.now();
+      for (const entry of (req.result || [])) {
+        if (now - entry.ts > CACHE_TTL_MS) continue;
+        if (Array.isArray(entry.cards)) out.push(...entry.cards);
+      }
+      resolve(out);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 async function deleteCollection(id) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -112,4 +140,9 @@ async function deleteCollection(id) {
   });
 }
 
-export { openDB, getCollection, saveCollection, deleteCollection, getAllCollections, getCachedCards, cacheCards, clearExpiredCache };
+export {
+  openDB,
+  getCollection, saveCollection, deleteCollection,
+  getAllCollections, getAllCollectionsFull,
+  getCachedCards, getAllCachedCards, cacheCards, clearExpiredCache,
+};

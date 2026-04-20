@@ -1,4 +1,4 @@
-import { getCachedCards, cacheCards } from './db.js';
+import { getCachedCards, cacheCards, getAllCachedCards } from './db.js';
 
 const VARIANT_ORDER = ['normal', 'holofoil', '1stEditionNormal', '1stEditionHolofoil', 'reverseHolofoil', 'default'];
 
@@ -158,4 +158,49 @@ function expandVariants(rawCards) {
   return slots;
 }
 
-export { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, getVariantLabel, VARIANT_LABELS };
+async function hydrateCards(cardIds) {
+  const result = new Map();
+  if (!Array.isArray(cardIds) || cardIds.length === 0) return result;
+
+  const unique = [...new Set(cardIds.filter(Boolean))];
+  const remaining = new Set(unique);
+
+  try {
+    const allCached = await getAllCachedCards();
+    for (const card of allCached) {
+      if (remaining.has(card.cardId)) {
+        result.set(card.cardId, card);
+        remaining.delete(card.cardId);
+      }
+    }
+  } catch { /* cache unavailable, proceed to API */ }
+
+  if (remaining.size === 0) return result;
+
+  const missing = [...remaining];
+  const batchSize = 40;
+  for (let i = 0; i < missing.length; i += batchSize) {
+    const batch = missing.slice(i, i + batchSize);
+    const q = encodeURIComponent(batch.map(id => `id:"${id}"`).join(' OR '));
+    try {
+      const url = `https://api.pokemontcg.io/v2/cards?q=${q}&pageSize=250`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const json = await res.json();
+      const byPokemon = new Map();
+      for (const raw of (json.data || [])) {
+        const card = parseCard(raw);
+        result.set(card.cardId, card);
+        if (!byPokemon.has(card.name)) byPokemon.set(card.name, []);
+        byPokemon.get(card.name).push(card);
+      }
+      for (const [pokemonName, cards] of byPokemon) {
+        try { await cacheCards(pokemonName, cards); } catch { /* ignore cache write errors */ }
+      }
+    } catch { /* ignore batch errors; remaining cards stay unhydrated */ }
+  }
+
+  return result;
+}
+
+export { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, getVariantLabel, hydrateCards, VARIANT_LABELS };

@@ -75,7 +75,7 @@ async function loadFromGist() {
     }
     const data = JSON.parse(file.content);
     emitStatus('synced', 'Synced');
-    return data;
+    return { data, raw: file.content };
   } catch (err) {
     if (!err.message.includes('Invalid') && !err.message.includes('not found')) {
       emitStatus('error', 'Sync failed');
@@ -131,7 +131,7 @@ async function saveToGist(serialized) {
 
 function scheduleSave(stateData) {
   if (!isSyncConfigured()) return;
-  const serialized = JSON.stringify(stateData, null, 2);
+  const serialized = typeof stateData === 'string' ? stateData : JSON.stringify(stateData);
   // Skip if content matches the latest queued or confirmed-pushed state
   const effectiveLatest = pendingJson !== null ? pendingJson : lastSavedJson;
   if (serialized === effectiveLatest) return;
@@ -204,7 +204,7 @@ function stopPolling() {
 }
 
 function setLastSavedJson(data) {
-  lastSavedJson = JSON.stringify(data, null, 2);
+  lastSavedJson = typeof data === 'string' ? data : JSON.stringify(data);
   pendingJson = null;
 }
 

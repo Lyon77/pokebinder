@@ -666,6 +666,34 @@ main {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.slot-card-name {
+  margin-left: 0;
+  padding: 2px 4px;
+  font-size: 0.55rem;
+  color: var(--text);
+  text-align: center;
+  flex-shrink: 0;
+}
+.slot-rehydrating {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-alt);
+  border-radius: var(--radius);
+}
+.slot-rehydrating .spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spinner-rotate 0.8s linear infinite;
+}
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
 .slot-card-img {
   width: 100%;
   flex: 1;

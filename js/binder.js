@@ -26,6 +26,18 @@ function buildViews(totalPages) {
   return views;
 }
 
+function isCardStub(card) {
+  return !!(card && card.cardId && !card.imageSmall);
+}
+
+function slotSpinnerInnerHTML(topNums, bottomLabel) {
+  return `
+    ${topNums}
+    <div class="slot-rehydrating"><div class="spinner"></div></div>
+    ${bottomLabel || ''}
+  `;
+}
+
 function buildSlot(p, caughtSet, cardSelections, onToggle, onPickCard, collectionType) {
   const slot = document.createElement('div');
   const slotId = p.formId;
@@ -57,6 +69,21 @@ function buildPokedexSlot(slot, p, isCaught, cardSelections, onPickCard) {
 
   let nameHtml = p.name;
   if (p.formName) nameHtml += `<br><span class="form-label">(${p.formName})</span>`;
+
+  if (isCaught && isCardStub(card)) {
+    slot.className = 'binder-slot has-card caught rehydrating';
+    const topNums = `
+      <div class="slot-nums">
+        <span class="col-num">#${p.bookNum}</span>
+        <span class="dex-num">${p.id}</span>
+      </div>`;
+    slot.innerHTML = slotSpinnerInnerHTML(topNums, '');
+    slot.addEventListener('click', () => onPickCard(p.formId, p.name));
+    slot.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); onPickCard(p.formId, p.name); }
+    });
+    return slot;
+  }
 
   if (isCaught && card && card.imageSmall) {
     slot.className = 'binder-slot has-card caught';
@@ -105,6 +132,22 @@ function buildMasterSlot(slot, p, isCaught, onToggle) {
     slot.className = 'binder-slot has-card want';
   }
 
+  if (isCardStub(p)) {
+    slot.classList.add('rehydrating');
+    const topNums = `
+      <div class="slot-nums">
+        <span class="col-num">#${p.number || ''}</span>
+        <span class="slot-variant-label">${variantLabel || ''}</span>
+        <span class="dex-num">${isCaught ? '&#10003;' : ''}</span>
+      </div>`;
+    slot.innerHTML = slotSpinnerInnerHTML(topNums, '');
+    slot.addEventListener('click', () => onToggle(p.formId));
+    slot.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); onToggle(p.formId); }
+    });
+    return slot;
+  }
+
   slot.innerHTML = `
     <div class="slot-nums">
       <span class="col-num">#${p.number}</span>
@@ -145,12 +188,30 @@ function buildFreestyleSlot(slot, p, isCaught, cardSelections, onPickCard) {
     slot.className = 'binder-slot has-card want';
   }
 
+  if (isCardStub(p)) {
+    slot.classList.add('rehydrating');
+    const topNums = `
+      <div class="slot-nums">
+        <span class="col-num">#${p.collectionNum}</span>
+        <span class="dex-num">${isCaught ? '&#10003;' : ''}</span>
+      </div>`;
+    slot.innerHTML = slotSpinnerInnerHTML(topNums, '');
+    slot.addEventListener('click', (e) => onPickCard(p.formId, p.name || '', e));
+    slot.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); onPickCard(p.formId, p.name || '', e); }
+    });
+    return slot;
+  }
+
+  const cardInfo = [p.setName, p.number].filter(Boolean).join(' ');
   slot.innerHTML = `
     <div class="slot-nums">
       <span class="col-num">#${p.collectionNum}</span>
       <span class="dex-num">${isCaught ? '&#10003;' : ''}</span>
+      <span class="slot-card-label">${cardInfo}</span>
     </div>
     <img class="slot-card-img" src="${p.imageSmall}" alt="${p.name}" loading="lazy"${!isCaught ? ' style="filter:grayscale(1);opacity:0.4;"' : ''}>
+    <div class="slot-card-label slot-card-name">${p.name || ''}</div>
   `;
 
   // Filled freestyle slot triggers context menu via onPickCard

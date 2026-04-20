@@ -16,14 +16,16 @@ import {
   setFreestyleSlot, clearFreestyleSlot,
   saveBooks, exportState, importState, resetCaught,
   defaultCollectionRecord,
+  parseBundle, isLegacyV1, migrateV1ToV2, rehydrateBundle, reconcileBundleToIDB,
+  currentBundleObject, pushBundle, saveCollectionRecord, deleteCollectionRecord,
 } from './storage.js';
 import {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
   setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
   loadFromGist, cancelPendingSave, startPolling, stopPolling,
 } from './sync.js';
-import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants } from './tcg-api.js';
-import { getAllCollections, deleteCollection, saveCollection } from './db.js';
+import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, hydrateCards } from './tcg-api.js';
+import { getAllCollections, getAllCollectionsFull } from './db.js';
 
 // ---- View State ----
 const VIEW_STATE_KEY = 'pokebinder-view-state';
@@ -359,7 +361,7 @@ collectionTitle.addEventListener('click', async (e) => {
       e.stopPropagation();
       const id = btn.dataset.deleteId;
       if (!confirm(`Delete collection "${collections.find(c => c.id === id)?.name}"?`)) return;
-      await deleteCollection(id);
+      await deleteCollectionRecord(id);
       if (id === activeId) {
         const remaining = collections.filter(c => c.id !== id);
         if (remaining.length > 0) {
@@ -391,7 +393,7 @@ collectionTitle.addEventListener('click', async (e) => {
         const record = await (await import('./db.js')).getCollection(id);
         if (record) {
           record.name = newName.trim();
-          await saveCollection(record);
+          await saveCollectionRecord(record);
         }
       }
       closeCollectionDropdown();
@@ -713,7 +715,7 @@ createConfirmBtn.addEventListener('click', async () => {
     createProgressText.textContent = 'Saving to database...';
     createProgressBar.style.width = '50%';
     await yield_();
-    await saveCollection(record);
+    await saveCollectionRecord(record);
 
     createProgressText.textContent = 'Loading collection...';
     createProgressBar.style.width = '70%';
@@ -1422,6 +1424,9 @@ function updatePickerIntent() {
 
 function updatePickerBackVisibility() {
   cardPickerBack.hidden = !(state.type === 'freestyle' && pickerMode === 'cards');
+  const isSearchMode = pickerMode === 'pokemon-search';
+  cardPickerSave.hidden = isSearchMode;
+  cardPickerClear.hidden = isSearchMode;
 }
 
 function closeCardPicker() {
@@ -1481,6 +1486,7 @@ document.addEventListener('keydown', (e) => {
     closeCardPicker();
     restorePickerFocus();
   } else if (e.key === 'Enter') {
+    if (pickerMode === 'pokemon-search') return;
     const focused = document.activeElement;
     if (focused && focused.classList.contains('card-picker-item')) return;
     if (focused === cardPickerFilter) return;
@@ -1882,16 +1888,47 @@ function showSyncIndicator(status, message) {
 }
 
 setStatusCallback(showSyncIndicator);
+
+async function handleRemoteData(raw) {
+  if (!raw || typeof raw !== 'object') return false;
+  let bundle = parseBundle(raw);
+  let needsMigrationPush = false;
+  if (!bundle && isLegacyV1(raw)) {
+    const localCollections = await getAllCollectionsFull();
+    bundle = migrateV1ToV2(raw, localCollections);
+    needsMigrationPush = true;
+  }
+  if (!bundle) return false;
+
+  const rehydrated = await rehydrateBundle(bundle.collections);
+  await reconcileBundleToIDB(rehydrated);
+
+  if (bundle.settings && bundle.settings.binderFlow) {
+    saveSettings({ binderFlow: bundle.settings.binderFlow });
+  }
+
+  const localActiveId = getActiveCollectionId();
+  const availableIds = new Set(rehydrated.map(r => r.id));
+  if (!availableIds.has(localActiveId)) {
+    let nextId;
+    if (bundle.activeId && availableIds.has(bundle.activeId)) nextId = bundle.activeId;
+    else if (rehydrated.length > 0) nextId = rehydrated[0].id;
+    else nextId = 'living-dex';
+    setActiveCollectionId(nextId);
+  }
+
+  state = await loadState();
+
+  return { handled: true, needsMigrationPush };
+}
+
 setRemoteChangeCallback(async (data) => {
-  if (data && Array.isArray(data.caught)) {
-    const remote = loadStateFromData(data);
-    if (remote) {
-      state = remote;
-      await saveStateLocal(state);
-      updateTypeAwareControls();
-      binderFlowCheck.checked = state.binderFlow === 'row';
-      rebuildCollection();
-    }
+  const result = await handleRemoteData(data);
+  if (result && result.handled) {
+    if (result.needsMigrationPush) await pushBundle(state);
+    updateTypeAwareControls();
+    binderFlowCheck.checked = state.binderFlow === 'row';
+    rebuildCollection();
   }
 });
 
@@ -1920,17 +1957,20 @@ syncSaveBtn.addEventListener('click', async () => {
   syncStatusBox.textContent = 'Testing connection...';
   syncStatusBox.className = 'sync-status-box';
   try {
-    const data = await loadFromGist();
-    if (data && Array.isArray(data.caught)) {
-      const remote = loadStateFromData(data);
-      if (remote) {
-        state = remote;
-        await saveStateLocal(state);
-        setLastSavedJson(serializeState(state));
+    const gist = await loadFromGist();
+    if (gist && gist.data) {
+      const result = await handleRemoteData(gist.data);
+      if (result && result.handled) {
+        setLastSavedJson(gist.raw);
+        if (result.needsMigrationPush) await pushBundle(state);
         updateTypeAwareControls();
         binderFlowCheck.checked = state.binderFlow === 'row';
         rebuildCollection();
       }
+    } else {
+      // Empty gist — publish current local state as the initial bundle
+      setLastSavedJson('');
+      await pushBundle(state);
     }
     syncStatusBox.textContent = 'Connected!';
     syncStatusBox.className = 'sync-status-box connected';
@@ -1973,15 +2013,19 @@ async function init() {
 
   if (isSyncConfigured()) {
     try {
-      const data = await loadFromGist();
-      if (data && Array.isArray(data.caught)) {
-        const remote = loadStateFromData(data);
-        if (remote) {
-          state = remote;
-          await saveStateLocal(state);
+      const gist = await loadFromGist();
+      if (gist && gist.data) {
+        const result = await handleRemoteData(gist.data);
+        if (result && result.handled) {
+          setLastSavedJson(gist.raw);
+          if (result.needsMigrationPush) await pushBundle(state);
+        } else {
+          setLastSavedJson(gist.raw);
         }
+      } else {
+        setLastSavedJson('');
+        await pushBundle(state);
       }
-      setLastSavedJson(serializeState(state));
       startPolling(30000);
     } catch { /* Fall back to local state */ }
   }
@@ -2000,14 +2044,13 @@ async function init() {
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && isSyncConfigured()) {
     try {
-      const data = await loadFromGist();
-      if (data && Array.isArray(data.caught)) {
-        const remote = loadStateFromData(data);
-        if (remote) {
-          cancelPendingSave();
-          state = remote;
-          await saveStateLocal(state);
-          setLastSavedJson(serializeState(state));
+      const gist = await loadFromGist();
+      if (gist && gist.data) {
+        cancelPendingSave();
+        const result = await handleRemoteData(gist.data);
+        if (result && result.handled) {
+          setLastSavedJson(gist.raw);
+          if (result.needsMigrationPush) await pushBundle(state);
           updateTypeAwareControls();
           rebuildCollection();
         }
