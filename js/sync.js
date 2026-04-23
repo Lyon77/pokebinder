@@ -16,6 +16,10 @@ function isSyncConfigured() {
   return !!(syncPat && syncGistId);
 }
 
+function hasPendingLocalChange() {
+  return !!(saveTimer || pendingJson !== null);
+}
+
 function getSyncConfig() {
   return { pat: syncPat, gistId: syncGistId };
 }
@@ -216,6 +220,7 @@ function cancelPendingSave() {
 
 export {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
+  hasPendingLocalChange,
   setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
   loadFromGist, saveToGist, scheduleSave, cancelPendingSave,
   startPolling, stopPolling,

@@ -21,6 +21,7 @@ import {
 } from './storage.js';
 import {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
+  hasPendingLocalChange,
   setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
   loadFromGist, cancelPendingSave, startPolling, stopPolling,
 } from './sync.js';
@@ -1970,7 +1971,10 @@ async function handleRemoteData(raw, { mode = 'reconcile' } = {}) {
     setActiveCollectionId(nextId);
   }
 
-  state = await loadState();
+  // Skip reassigning in-memory state from IDB when a local save is pending —
+  // the user's in-flight edits may not have hit IDB yet and a reload would
+  // clobber them. The pending push will propagate the user's state to the gist.
+  if (!hasPendingLocalChange()) state = await loadState();
 
   return { handled: true, needsMigrationPush };
 }
@@ -2071,64 +2075,72 @@ async function maybeResetTcgCache() {
 }
 
 // ---- Init ----
+function renderAll() {
+  binderLayoutSelect.value = getLayout();
+  binderFlowCheck.checked = state.binderFlow === 'row';
+  updateSyncButton();
+  updateTypeAwareControls();
+  rebuildCollection();
+  if (state.type === 'pokedex') switchView(currentView);
+  else switchView('binder');
+}
+
+async function reconcileFromGist() {
+  try {
+    const gist = await loadFromGist();
+    if (gist && gist.data) {
+      // Page load: use union mode so collections created locally but
+      // not yet pushed to the gist (e.g., created just before a
+      // refresh) are preserved and pushed to the remote instead of
+      // being wiped by an older bundle.
+      const result = await handleRemoteData(gist.data, { mode: 'union' });
+      if (result && result.handled) {
+        setLastSavedJson(gist.raw);
+        if (result.needsMigrationPush) await pushBundle(state);
+        renderAll();
+      } else {
+        setLastSavedJson(gist.raw);
+      }
+    } else {
+      setLastSavedJson('');
+      await pushBundle(state);
+    }
+    startPolling(30000);
+  } catch { /* Fall back to local state */ }
+}
+
 async function init() {
   cleanupLegacyStorage();
   await maybeResetTcgCache();
   state = await loadState();
   await loadPokemonData();
 
-  if (isSyncConfigured()) {
-    try {
-      const gist = await loadFromGist();
-      if (gist && gist.data) {
-        // Page load: use union mode so collections created locally but
-        // not yet pushed to the gist (e.g., created just before a
-        // refresh) are preserved and pushed to the remote instead of
-        // being wiped by an older bundle.
-        const result = await handleRemoteData(gist.data, { mode: 'union' });
-        if (result && result.handled) {
-          setLastSavedJson(gist.raw);
-          if (result.needsMigrationPush) await pushBundle(state);
-        } else {
-          setLastSavedJson(gist.raw);
-        }
-      } else {
-        setLastSavedJson('');
-        await pushBundle(state);
-      }
-      startPolling(30000);
-    } catch { /* Fall back to local state */ }
-  }
+  // Paint from local IDB immediately. The reconcile runs in the background
+  // so the UI is interactive while the gist is being fetched and hydrated.
+  renderAll();
 
-  binderLayoutSelect.value = getLayout();
-  binderFlowCheck.checked = state.binderFlow === 'row';
-  updateSyncButton();
-  updateTypeAwareControls();
-  rebuildCollection();
-
-  if (state.type === 'pokedex') switchView(currentView);
-  else switchView('binder');
+  if (isSyncConfigured()) reconcileFromGist();
 }
 
 // Re-sync on tab focus
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'visible' && isSyncConfigured()) {
-    try {
-      const gist = await loadFromGist();
-      if (gist && gist.data) {
-        // Don't cancelPendingSave here — if the user has local changes
-        // queued, those must still go out. Use union so a stale remote
-        // doesn't wipe fresh local collections.
-        const result = await handleRemoteData(gist.data, { mode: 'union' });
-        if (result && result.handled) {
-          setLastSavedJson(gist.raw);
-          if (result.needsMigrationPush) await pushBundle(state);
-          updateTypeAwareControls();
-          rebuildCollection();
-        }
+  if (document.visibilityState !== 'visible' || !isSyncConfigured()) return;
+  // Skip the tab-focus pull when a local save is queued or in-flight, mirroring
+  // the guard in pollForChanges. The pending push is the newer truth; a pull
+  // now would risk clobbering it.
+  if (hasPendingLocalChange()) return;
+  try {
+    const gist = await loadFromGist();
+    if (gist && gist.data) {
+      const result = await handleRemoteData(gist.data, { mode: 'union' });
+      if (result && result.handled) {
+        setLastSavedJson(gist.raw);
+        if (result.needsMigrationPush) await pushBundle(state);
+        updateTypeAwareControls();
+        rebuildCollection();
       }
-    } catch { /* Ignore */ }
-  }
+    }
+  } catch { /* Ignore */ }
 });
 
 init();

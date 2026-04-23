@@ -158,12 +158,27 @@ function expandVariants(rawCards) {
   return slots;
 }
 
-async function hydrateCards(cardIds) {
+async function hydrateCards(cardIds, { localCards } = {}) {
   const result = new Map();
   if (!Array.isArray(cardIds) || cardIds.length === 0) return result;
 
   const unique = [...new Set(cardIds.filter(Boolean))];
   const remaining = new Set(unique);
+
+  // Local collection records hold the full card metadata already — prefer them
+  // over the name-keyed cache and the network. A card is considered usable if
+  // it carries `imageSmall`; stub entries ({ cardId } only) fall through.
+  if (localCards instanceof Map) {
+    for (const id of unique) {
+      const card = localCards.get(id);
+      if (card && card.imageSmall) {
+        result.set(id, card);
+        remaining.delete(id);
+      }
+    }
+  }
+
+  if (remaining.size === 0) return result;
 
   try {
     const allCached = await getAllCachedCards();

@@ -1,5 +1,5 @@
 import { getCollection, saveCollection, deleteCollection, getAllCollectionsFull } from './db.js';
-import { scheduleSave, isSyncConfigured } from './sync.js';
+import { scheduleSave, isSyncConfigured, hasPendingLocalChange } from './sync.js';
 import { hydrateCards } from './tcg-api.js';
 
 const SETTINGS_KEY = 'pokebinder-settings';
@@ -354,11 +354,36 @@ function applyHydrationToRecord(record, hydrated) {
   return record;
 }
 
+function buildLocalCardsMap(localRecords) {
+  // Local collection records already hold full card metadata for every card
+  // the user has ever added. Harvest them keyed by cardId so hydrateCards can
+  // resolve from local data before touching the name cache or the network.
+  const map = new Map();
+  const consider = (card) => {
+    if (card && card.cardId && card.imageSmall && !map.has(card.cardId)) {
+      map.set(card.cardId, card);
+    }
+  };
+  for (const rec of localRecords) {
+    const type = rec.type || 'pokedex';
+    if (type === 'pokedex' && rec.cardSelections) {
+      for (const card of Object.values(rec.cardSelections)) consider(card);
+    } else if (type === 'master' && Array.isArray(rec.slotList)) {
+      for (const slot of rec.slotList) consider(slot);
+    } else if (type === 'freestyle' && Array.isArray(rec.slots)) {
+      for (const slot of rec.slots) consider(slot);
+    }
+  }
+  return map;
+}
+
 async function rehydrateBundle(bundleCollections) {
   const stubRecords = bundleCollections.map(expandCollection);
   const allIds = [];
   for (const rec of stubRecords) allIds.push(...collectCardIds(rec));
-  const hydrated = await hydrateCards(allIds);
+  const localRecords = await getAllCollectionsFull();
+  const localCards = buildLocalCardsMap(localRecords);
+  const hydrated = await hydrateCards(allIds, { localCards });
   return stubRecords.map(rec => applyHydrationToRecord(rec, hydrated));
 }
 
@@ -392,6 +417,10 @@ async function deleteCollectionRecord(id) {
 //   genuinely means another device deleted it): upsert remote AND delete
 //   local collections not in the bundle.
 async function reconcileBundleToIDB(rehydratedRecords, mode = 'reconcile') {
+  // If a local save is queued or in-flight, the user's pending push is the
+  // newer truth. Writing stale remote records over it would silently lose
+  // unsaved edits — let the pending push propagate to the gist instead.
+  if (hasPendingLocalChange()) return false;
   const existing = await getAllCollectionsFull();
   const incomingIds = new Set(rehydratedRecords.map(r => r.id));
   for (const rec of rehydratedRecords) {
