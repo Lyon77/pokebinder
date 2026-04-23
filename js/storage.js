@@ -377,14 +377,24 @@ function buildLocalCardsMap(localRecords) {
   return map;
 }
 
-async function rehydrateBundle(bundleCollections) {
+async function rehydrateBundle(bundleCollections, { priorityIds } = {}) {
   const stubRecords = bundleCollections.map(expandCollection);
   const allIds = [];
   for (const rec of stubRecords) allIds.push(...collectCardIds(rec));
   const localRecords = await getAllCollectionsFull();
   const localCards = buildLocalCardsMap(localRecords);
-  const hydrated = await hydrateCards(allIds, { localCards });
-  return stubRecords.map(rec => applyHydrationToRecord(rec, hydrated));
+  const hydrationOptions = { localCards };
+  if (Array.isArray(priorityIds) && priorityIds.length > 0) {
+    // Stage-1 reconcile: only the currently-visible cards are allowed to hit
+    // the network. Non-priority cards still resolve from localCards and the
+    // name cache when possible — if neither has them, they remain as stubs
+    // for the unrestricted stage-2 pass to fill in.
+    hydrationOptions.networkIds = priorityIds;
+  }
+  const hydrated = await hydrateCards(allIds, hydrationOptions);
+  const records = stubRecords.map(rec => applyHydrationToRecord(rec, hydrated));
+  const stubsRemain = records.some(rec => collectCardIds(rec).length > 0);
+  return { records, stubsRemain };
 }
 
 async function pushBundle(stateForSettings) {

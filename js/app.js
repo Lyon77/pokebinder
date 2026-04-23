@@ -1939,7 +1939,7 @@ function showSyncIndicator(status, message) {
 
 setStatusCallback(showSyncIndicator);
 
-async function handleRemoteData(raw, { mode = 'reconcile' } = {}) {
+async function handleRemoteData(raw, { mode = 'reconcile', priorityIds } = {}) {
   if (!raw || typeof raw !== 'object') return false;
   let bundle = parseBundle(raw);
   let needsMigrationPush = false;
@@ -1950,7 +1950,7 @@ async function handleRemoteData(raw, { mode = 'reconcile' } = {}) {
   }
   if (!bundle) return false;
 
-  const rehydrated = await rehydrateBundle(bundle.collections);
+  const { records: rehydrated, stubsRemain } = await rehydrateBundle(bundle.collections, { priorityIds });
   const hadLocalOnly = await reconcileBundleToIDB(rehydrated, mode);
   // If we kept local-only collections during union, schedule a push so the
   // remote catches up. This prevents a situation where a locally-created
@@ -1976,7 +1976,7 @@ async function handleRemoteData(raw, { mode = 'reconcile' } = {}) {
   // clobber them. The pending push will propagate the user's state to the gist.
   if (!hasPendingLocalChange()) state = await loadState();
 
-  return { handled: true, needsMigrationPush };
+  return { handled: true, needsMigrationPush, stubsRemain };
 }
 
 setRemoteChangeCallback(async (data) => {
@@ -2085,6 +2085,36 @@ function renderAll() {
   else switchView('binder');
 }
 
+// Card IDs for the slots currently on screen in the binder view — used to
+// prioritize hydration during the initial reconcile so the visible page fills
+// in before the rest of the collection.
+function getVisibleCardIds() {
+  if (!state || currentView !== 'binder') return [];
+  if (!Array.isArray(bookCollection) || bookCollection.length === 0) return [];
+  const layout = getLayout();
+  const { perPage } = parseLayout(layout);
+  const totalPages = getTotalPages(bookCollection.length, layout);
+  const views = buildViews(totalPages);
+  const view = views[Math.min(binderViewIndex, Math.max(0, views.length - 1))];
+  if (!view) return [];
+  const ids = new Set();
+  for (const pageIdx of view.pages) {
+    const start = pageIdx * perPage;
+    const end = Math.min(start + perPage, bookCollection.length);
+    for (let i = start; i < end; i++) {
+      const slot = bookCollection[i];
+      if (!slot) continue;
+      if (state.type === 'pokedex') {
+        const card = state.cardSelections && state.cardSelections[slot.formId];
+        if (card && card.cardId) ids.add(card.cardId);
+      } else if (slot.cardId) {
+        ids.add(slot.cardId);
+      }
+    }
+  }
+  return [...ids];
+}
+
 async function reconcileFromGist() {
   try {
     const gist = await loadFromGist();
@@ -2093,13 +2123,31 @@ async function reconcileFromGist() {
       // not yet pushed to the gist (e.g., created just before a
       // refresh) are preserved and pushed to the remote instead of
       // being wiped by an older bundle.
-      const result = await handleRemoteData(gist.data, { mode: 'union' });
-      if (result && result.handled) {
+      //
+      // Stage 1 restricts network hydration to the cards currently on screen.
+      // Non-visible cards that aren't already in local IDB or the name cache
+      // stay as stubs (rendered as spinners) until stage 2 fills them in.
+      const visibleIds = getVisibleCardIds();
+      const result1 = await handleRemoteData(gist.data, {
+        mode: 'union',
+        priorityIds: visibleIds.length > 0 ? visibleIds : undefined,
+      });
+      if (result1 && result1.handled) {
         setLastSavedJson(gist.raw);
-        if (result.needsMigrationPush) await pushBundle(state);
+        if (result1.needsMigrationPush) await pushBundle(state);
         renderAll();
       } else {
         setLastSavedJson(gist.raw);
+      }
+
+      // Stage 2 — only if stage 1 left unresolved stubs (network was needed
+      // beyond the visible set). Runs unrestricted to fill everything in.
+      if (result1 && result1.handled && result1.stubsRemain) {
+        const result2 = await handleRemoteData(gist.data, { mode: 'union' });
+        if (result2 && result2.handled) {
+          if (result2.needsMigrationPush) await pushBundle(state);
+          renderAll();
+        }
       }
     } else {
       setLastSavedJson('');

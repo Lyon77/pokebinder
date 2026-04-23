@@ -158,7 +158,7 @@ function expandVariants(rawCards) {
   return slots;
 }
 
-async function hydrateCards(cardIds, { localCards } = {}) {
+async function hydrateCards(cardIds, { localCards, networkIds } = {}) {
   const result = new Map();
   if (!Array.isArray(cardIds) || cardIds.length === 0) return result;
 
@@ -192,7 +192,14 @@ async function hydrateCards(cardIds, { localCards } = {}) {
 
   if (remaining.size === 0) return result;
 
-  const missing = [...remaining];
+  // When networkIds is provided, only cards in that allowlist are eligible for
+  // the network fallback. Anything else that couldn't be resolved locally is
+  // left unresolved — the caller will render it as a stub placeholder and fill
+  // it in via a follow-up pass without the networkIds restriction.
+  const allowNetwork = Array.isArray(networkIds) ? new Set(networkIds) : null;
+  const missing = [...remaining].filter(id => !allowNetwork || allowNetwork.has(id));
+  if (missing.length === 0) return result;
+
   const batchSize = 40;
   for (let i = 0; i < missing.length; i += batchSize) {
     const batch = missing.slice(i, i + batchSize);
