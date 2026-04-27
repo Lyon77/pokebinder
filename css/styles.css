@@ -894,6 +894,8 @@ main {
   .slot-nums { font-size: 0.6rem; }
   .card-picker-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; padding: 0.5rem; }
   .modal-content.card-picker-content { width: 95%; height: 85vh; }
+  /* iOS Safari auto-zooms inputs whose font-size is <16px on focus. */
+  .search-input, .form-input, .sync-input { font-size: 16px; }
 }
 
 @media (min-width: 600px) and (max-width: 900px) {
