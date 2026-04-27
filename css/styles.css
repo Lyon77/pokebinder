@@ -547,6 +547,7 @@ main {
   border-top: 1px solid var(--border);
   background: var(--surface-alt);
 }
+.picker-intent[hidden] { display: none; }
 .picker-intent-option {
   flex: 1;
   display: flex;

@@ -30,6 +30,17 @@ function parseCard(raw) {
   };
 }
 
+// pokemontcg.io stores Nidoran cards inconsistently — most are "Nidoran ♀" (with
+// a space) but a few (e.g. Team Rocket's) are "Nidoran♀". Lucene phrase matching
+// distinguishes these, so query both forms when the name contains ♀ or ♂.
+function buildNameQuery(name) {
+  if (!/[♀♂]/.test(name)) return `name:"${name}"`;
+  const spaced = name.replace(/\s*([♀♂])/, ' $1');
+  const unspaced = name.replace(/\s*([♀♂])/, '$1');
+  if (spaced === unspaced) return `name:"${name}"`;
+  return `name:"${unspaced}" OR name:"${spaced}"`;
+}
+
 async function fetchCardsForPokemon(name, { skipCache = false } = {}) {
   if (!skipCache) {
     try {
@@ -39,7 +50,7 @@ async function fetchCardsForPokemon(name, { skipCache = false } = {}) {
   }
 
   try {
-    const q = encodeURIComponent(`name:"${name}"`);
+    const q = encodeURIComponent(buildNameQuery(name));
     const url = `https://api.pokemontcg.io/v2/cards?q=${q}&orderBy=set.releaseDate&pageSize=250`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
