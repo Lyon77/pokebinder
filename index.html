@@ -109,7 +109,14 @@
         <button id="book-modal-close-btn" class="btn btn-close">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-description">Assign generations to books. Each generation must be in exactly one book.</p>
+        <p class="modal-description" id="book-settings-description">Assign generations to books. Each generation must be in exactly one book.</p>
+        <div id="book-sets-section" hidden>
+          <label class="form-label">Sets in this collection</label>
+          <input type="text" id="book-set-search" class="form-input" placeholder="Search sets to add...">
+          <div id="book-set-results" class="set-results" hidden></div>
+          <div id="book-included-sets" class="selected-sets" style="margin-top:0.5rem;"></div>
+          <div style="border-top:1px solid var(--border); margin:0.75rem 0;"></div>
+        </div>
         <div id="book-settings-body"></div>
         <div id="book-unassigned" style="color:var(--accent);font-size:0.85rem;margin-top:0.5rem;"></div>
         <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">

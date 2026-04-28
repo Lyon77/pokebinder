@@ -1047,12 +1047,14 @@ main {
 .collection-dd-left { display: flex; align-items: center; gap: 0.4rem; }
 .collection-dd-right { display: flex; align-items: center; gap: 0.4rem; }
 .collection-dd-check { width: 1rem; text-align: center; }
-.collection-dd-rename, .collection-dd-delete {
+.collection-dd-rename, .collection-dd-delete, .collection-dd-refresh {
   background: none; border: none; color: var(--text-muted); cursor: pointer;
   font-size: 0.9rem; padding: 0 0.2rem; line-height: 1;
 }
 .collection-dd-rename:hover { color: var(--caught-border); }
 .collection-dd-delete:hover { color: var(--accent); }
+.collection-dd-refresh:hover { color: var(--caught-border); }
+.collection-dd-refresh:disabled { opacity: 0.5; cursor: wait; }
 .collection-dd-add { color: var(--caught-border); }
 
 /* ---- Creation Modal ---- */

@@ -540,6 +540,32 @@ async function removeBook(state, index) {
   await saveState(state);
 }
 
+async function addSetToCollection(state, setMeta) {
+  if (state.type !== 'master') return;
+  if ((state.sets || []).includes(setMeta.id)) return;
+  state.sets = [...(state.sets || []), setMeta.id];
+  state.slotList = [...(state.slotList || []), ...setMeta.slotList];
+  await saveState(state);
+}
+
+async function removeSetFromCollection(state, setId) {
+  if (state.type !== 'master') return;
+  const remaining = (state.sets || []).filter(id => id !== setId);
+  if (remaining.length === 0) return;
+
+  const droppedSlotIds = new Set(
+    (state.slotList || []).filter(s => s.setId === setId).map(s => s.formId)
+  );
+  state.sets = remaining;
+  state.slotList = (state.slotList || []).filter(s => s.setId !== setId);
+  for (const id of droppedSlotIds) state.caught.delete(id);
+  for (const book of state.books || []) {
+    if (book.sets) book.sets = book.sets.filter(id => id !== setId);
+  }
+
+  await saveState(state);
+}
+
 function exportState(state) {
   const data = serializeState(state);
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -586,6 +612,7 @@ export {
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   setFreestyleSlot, clearFreestyleSlot,
   saveBooks, addBook, updateBook, removeBook,
+  addSetToCollection, removeSetFromCollection,
   exportState, importState, resetCaught,
   defaultCollectionRecord,
   // Bundle sync (v2)

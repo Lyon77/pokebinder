@@ -1,4 +1,5 @@
 import { getCachedCards, cacheCards, getAllCachedCards } from './db.js';
+import { variantsForCard, ensureOverridesLoaded } from './variant-rules.js';
 
 const VARIANT_ORDER = ['normal', 'holofoil', '1stEditionNormal', '1stEditionHolofoil', 'reverseHolofoil', 'default'];
 
@@ -112,10 +113,9 @@ function expandVariants(rawCards) {
   const slots = [];
   for (const raw of rawCards) {
     const card = parseCard(raw);
-    const prices = raw.tcgplayer && raw.tcgplayer.prices ? raw.tcgplayer.prices : {};
-    const variants = Object.keys(prices);
+    const variants = variantsForCard(raw);
 
-    if (variants.length === 0) {
+    if (!variants || variants.length === 0) {
       slots.push({
         ...card,
         slotId: `${card.cardId}:default`,
@@ -123,7 +123,6 @@ function expandVariants(rawCards) {
         rawNumber: raw.number || '',
       });
     } else {
-      // Sort variants by defined order
       variants.sort((a, b) => {
         const ai = VARIANT_ORDER.indexOf(a);
         const bi = VARIANT_ORDER.indexOf(b);
@@ -234,4 +233,4 @@ async function hydrateCards(cardIds, { localCards, networkIds } = {}) {
   return result;
 }
 
-export { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, getVariantLabel, hydrateCards, VARIANT_LABELS };
+export { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, getVariantLabel, hydrateCards, ensureOverridesLoaded, VARIANT_LABELS };

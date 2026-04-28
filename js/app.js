@@ -14,7 +14,8 @@ import {
   toggleCaught, toggleCategory, toggleExcludedForm,
   setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
   setFreestyleSlot, clearFreestyleSlot,
-  saveBooks, exportState, importState, resetCaught,
+  saveBooks, addSetToCollection, removeSetFromCollection,
+  exportState, importState, resetCaught,
   defaultCollectionRecord,
   parseBundle, isLegacyV1, migrateV1ToV2, rehydrateBundle, reconcileBundleToIDB,
   currentBundleObject, pushBundle, saveCollectionRecord, deleteCollectionRecord,
@@ -25,7 +26,7 @@ import {
   setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
   loadFromGist, cancelPendingSave, startPolling, stopPolling,
 } from './sync.js';
-import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, hydrateCards } from './tcg-api.js';
+import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, hydrateCards, ensureOverridesLoaded } from './tcg-api.js';
 import { getAllCollections, getAllCollectionsFull, clearAllTcgCache } from './db.js';
 
 // ---- View State ----
@@ -84,8 +85,13 @@ const bookSettingsBtn = document.getElementById('book-settings-btn');
 const bookSettingsModal = document.getElementById('book-settings-modal');
 const bookModalCloseBtn = document.getElementById('book-modal-close-btn');
 const bookSettingsBodyEl = document.getElementById('book-settings-body');
+const bookSettingsDescEl = document.getElementById('book-settings-description');
 const bookUnassignedEl = document.getElementById('book-unassigned');
 const bookAddBtn = document.getElementById('book-add-btn');
+const bookSetsSection = document.getElementById('book-sets-section');
+const bookSetSearch = document.getElementById('book-set-search');
+const bookSetResults = document.getElementById('book-set-results');
+const bookIncludedSets = document.getElementById('book-included-sets');
 const scrollTopBtn = document.getElementById('scroll-top-btn');
 const statsBar = document.getElementById('stats-bar');
 const collectionTitle = document.getElementById('collection-title');
@@ -291,6 +297,9 @@ collectionTitle.addEventListener('click', async (e) => {
     const item = document.createElement('div');
     item.className = 'collection-dd-item' + (c.id === activeId ? ' active' : '');
     const typeBadge = { pokedex: 'Pokedex', master: 'Master Set', freestyle: 'Freestyle' }[c.type] || c.type;
+    const refreshBtn = c.type === 'master'
+      ? `<button class="collection-dd-refresh" data-refresh-id="${c.id}" title="Refresh slots">&#10227;</button>`
+      : '';
     item.innerHTML = `
       <div class="collection-dd-left">
         <span class="collection-dd-check">${c.id === activeId ? '&#10003;' : ''}</span>
@@ -298,12 +307,13 @@ collectionTitle.addEventListener('click', async (e) => {
       </div>
       <div class="collection-dd-right">
         <span class="collection-dd-type">${typeBadge}</span>
+        ${refreshBtn}
         <button class="collection-dd-rename" data-rename-id="${c.id}" title="Rename">&#9998;</button>
         ${collections.length > 1 ? `<button class="collection-dd-delete" data-delete-id="${c.id}" title="Delete">&times;</button>` : ''}
       </div>
     `;
     item.addEventListener('click', async (e) => {
-      if (e.target.closest('.collection-dd-delete') || e.target.closest('.collection-dd-rename')) return;
+      if (e.target.closest('.collection-dd-delete') || e.target.closest('.collection-dd-rename') || e.target.closest('.collection-dd-refresh')) return;
       if (c.id !== activeId) {
         setActiveCollectionId(c.id);
         state = await loadState();
@@ -337,6 +347,24 @@ collectionTitle.addEventListener('click', async (e) => {
           updateTypeAwareControls();
           rebuildCollection();
         }
+      }
+      closeCollectionDropdown();
+    });
+  }
+
+  // Refresh handlers (master sets only)
+  for (const btn of collectionDropdown.querySelectorAll('.collection-dd-refresh')) {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.refreshId;
+      const orig = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '&hellip;';
+      try {
+        await refreshMasterSlots(id, id === activeId);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
       }
       closeCollectionDropdown();
     });
@@ -387,6 +415,65 @@ document.addEventListener('click', (e) => {
     closeCollectionDropdown();
   }
 });
+
+async function refreshMasterSlots(id, isActive) {
+  const { getCollection } = await import('./db.js');
+  const record = isActive ? null : await getCollection(id);
+  const sets = isActive ? (state.sets || []) : (record && Array.isArray(record.sets) ? record.sets : []);
+  const oldSlotList = isActive ? (state.slotList || []) : (record && Array.isArray(record.slotList) ? record.slotList : []);
+  const caughtSet = isActive ? state.caught : new Set(record && Array.isArray(record.caught) ? record.caught : []);
+  const name = isActive ? state.collectionName : (record && record.name);
+
+  if (sets.length === 0) {
+    alert('This Master Set has no sets to refresh.');
+    return;
+  }
+
+  await ensureOverridesLoaded();
+
+  const allSlots = [];
+  for (const setId of sets) {
+    const cardResult = await fetchSetCards(setId);
+    if (cardResult.error && cardResult.cards.length === 0) {
+      alert(`Failed to fetch ${setId}: ${cardResult.error}`);
+      return;
+    }
+    allSlots.push(...expandVariants(cardResult.cards));
+  }
+
+  const oldIds = new Set(oldSlotList.map(s => s && s.slotId).filter(Boolean));
+  const newIds = new Set(allSlots.map(s => s.slotId));
+  const added = [...newIds].filter(sid => !oldIds.has(sid));
+  const removed = [...oldIds].filter(sid => !newIds.has(sid));
+  const ownedRemoved = removed.filter(sid => caughtSet.has(sid));
+
+  if (added.length === 0 && removed.length === 0) {
+    alert(`"${name}" is already up to date.`);
+    return;
+  }
+
+  const lines = [
+    `Refresh "${name}"?`,
+    '',
+    `+${added.length} new slot(s)`,
+    `-${removed.length} removed slot(s)`,
+  ];
+  if (ownedRemoved.length > 0) {
+    lines.push(`${ownedRemoved.length} owned slot(s) will lose their owned state.`);
+  }
+  if (!confirm(lines.join('\n'))) return;
+
+  if (isActive) {
+    state.slotList = allSlots;
+    for (const sid of removed) state.caught.delete(sid);
+    await saveState(state);
+    rebuildCollection();
+  } else {
+    record.slotList = allSlots;
+    record.caught = (record.caught || []).filter(sid => newIds.has(sid));
+    await saveCollectionRecord(record);
+  }
+}
 
 // ---- Collection creation modal ----
 
@@ -575,6 +662,7 @@ createSetSearch.addEventListener('input', () => {
         try {
           const cardResult = await fetchSetCards(s.id);
           meta.textContent = `Expanding variants...`;
+          await ensureOverridesLoaded();
           // Yield to UI before heavy computation
           await new Promise(r => setTimeout(r, 0));
           const slotList = expandVariants(cardResult.cards);
@@ -953,8 +1041,15 @@ function getBookSourceKey() {
 
 function renderBookSettings() {
   bookSettingsBodyEl.innerHTML = '';
+  renderBookSetsSection();
 
   if (state.type === 'freestyle') return;
+
+  if (bookSettingsDescEl) {
+    bookSettingsDescEl.textContent = state.type === 'master'
+      ? 'Manage which sets belong to this collection and assign them to books.'
+      : 'Assign generations to books. Each generation must be in exactly one book.';
+  }
 
   const key = getBookSourceKey();
   const allSources = getAllSources();
@@ -1035,6 +1130,112 @@ function renderBookSettings() {
     bookUnassignedEl.textContent = '';
   }
 }
+
+function renderBookSetsSection() {
+  if (state.type !== 'master') {
+    bookSetsSection.hidden = true;
+    return;
+  }
+  bookSetsSection.hidden = false;
+  bookSetSearch.value = '';
+  bookSetResults.hidden = true;
+  bookSetResults.innerHTML = '';
+
+  bookIncludedSets.innerHTML = '';
+  const setIds = state.sets || [];
+  if (setIds.length === 0) {
+    bookIncludedSets.innerHTML = '<div style="color:var(--text-muted);font-size:0.7rem;">No sets in this collection</div>';
+    return;
+  }
+  for (const setId of setIds) {
+    const slots = (state.slotList || []).filter(s => s.setId === setId);
+    const setName = slots[0]?.setName || setId;
+    const slotCount = slots.length;
+    const caughtCount = slots.filter(s => state.caught.has(s.formId)).length;
+    const isLast = setIds.length === 1;
+
+    const el = document.createElement('div');
+    el.className = 'selected-set';
+    el.innerHTML = `
+      <div>
+        <div>${setName}</div>
+        <div class="selected-set-slots">${slotCount} slots${caughtCount ? ` &middot; ${caughtCount} caught` : ''}</div>
+      </div>
+      <button class="btn-remove" title="${isLast ? 'Cannot remove the last set' : 'Remove set'}"${isLast ? ' disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>&times;</button>
+    `;
+    if (!isLast) {
+      el.querySelector('.btn-remove').addEventListener('click', async () => {
+        const msg = caughtCount > 0
+          ? `Remove "${setName}"? This will permanently delete ${caughtCount} caught marker${caughtCount === 1 ? '' : 's'} in that set.`
+          : `Remove "${setName}"?`;
+        if (!window.confirm(msg)) return;
+        await removeSetFromCollection(state, setId);
+        binderViewIndex = 0;
+        rebuildCollection();
+        renderBookSettings();
+        renderBookSelector();
+      });
+    }
+    bookIncludedSets.appendChild(el);
+  }
+}
+
+let bookSetSearchTimer = null;
+bookSetSearch.addEventListener('input', () => {
+  clearTimeout(bookSetSearchTimer);
+  bookSetSearchTimer = setTimeout(async () => {
+    const q = bookSetSearch.value.trim();
+    if (!q) { bookSetResults.hidden = true; bookSetResults.innerHTML = ''; return; }
+    bookSetResults.innerHTML = '<div style="padding:0.5rem;color:var(--text-muted);font-size:0.7rem;">Searching...</div>';
+    bookSetResults.hidden = false;
+    const result = await fetchSets(q);
+    if (result.error) {
+      bookSetResults.innerHTML = `<div style="padding:0.5rem;color:var(--accent);font-size:0.7rem;">${result.error}</div>`;
+      return;
+    }
+    const includedIds = new Set(state.sets || []);
+    const candidates = result.sets.filter(s => !includedIds.has(s.id));
+    if (candidates.length === 0) {
+      bookSetResults.innerHTML = '<div style="padding:0.5rem;color:var(--text-muted);font-size:0.7rem;">No new sets found</div>';
+      return;
+    }
+    bookSetResults.innerHTML = '';
+    for (const s of candidates) {
+      const el = document.createElement('div');
+      el.className = 'set-result';
+      el.innerHTML = `
+        <div class="set-result-info">
+          <span>${s.name}</span>
+          <span class="set-result-meta">${s.year} &middot; ${s.total} cards</span>
+        </div>
+        <button class="btn btn-add">Add</button>
+      `;
+      el.querySelector('.btn-add').addEventListener('click', async (e) => {
+        const btn = e.target;
+        const meta = el.querySelector('.set-result-meta');
+        const origMeta = meta.textContent;
+        btn.textContent = 'Fetching...';
+        btn.disabled = true;
+        meta.textContent = `Fetching ${s.total} cards...`;
+        try {
+          const cardResult = await fetchSetCards(s.id);
+          meta.textContent = 'Expanding variants...';
+          await new Promise(r => setTimeout(r, 0));
+          const slotList = expandVariants(cardResult.cards);
+          await addSetToCollection(state, { id: s.id, name: s.name, year: s.year, total: s.total, slotList });
+          rebuildCollection();
+          renderBookSettings();
+          renderBookSelector();
+        } catch (err) {
+          meta.textContent = origMeta;
+          btn.textContent = 'Retry';
+          btn.disabled = false;
+        }
+      });
+      bookSetResults.appendChild(el);
+    }
+  }, 300);
+});
 
 bookAddBtn.addEventListener('click', () => {
   const key = getBookSourceKey();
