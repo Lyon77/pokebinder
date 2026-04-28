@@ -6,7 +6,7 @@ import {
 import { buildCollection, buildBookCollection } from './collection.js';
 import { renderListView, updateListCaughtState } from './render.js';
 import { renderBinderView, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews } from './binder.js';
-import { computeStats, renderStats } from './stats.js';
+import { computeStats, computeMasterStats, renderStats, renderMasterStats } from './stats.js';
 import {
   loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
   loadSettings, saveSettings,
@@ -162,17 +162,13 @@ function updateStats() {
   if (state.type === 'pokedex') {
     const stats = computeStats(collection, state.caught);
     renderStats(statsOverallText, statsOverallBar, statsGenEl, stats);
+  } else if (state.type === 'master') {
+    const stats = computeMasterStats(collection, state.caught, state.sets || []);
+    renderMasterStats(statsOverallText, statsOverallBar, statsGenEl, stats);
   } else {
-    // Simple caught / total for master and freestyle
-    let total, caught;
-    if (state.type === 'freestyle') {
-      const filled = collection.filter(s => !s.isEmpty);
-      total = filled.length;
-      caught = filled.filter(s => state.caught.has(s.formId)).length;
-    } else {
-      total = collection.length;
-      caught = [...state.caught].filter(id => collection.some(s => s.formId === id)).length;
-    }
+    const filled = collection.filter(s => !s.isEmpty);
+    const total = filled.length;
+    const caught = filled.filter(s => state.caught.has(s.formId)).length;
     const pct = total > 0 ? ((caught / total) * 100).toFixed(1) : '0.0';
     statsOverallText.textContent = `${caught} / ${total} (${pct}%)`;
     statsOverallBar.style.width = `${total > 0 ? (caught / total) * 100 : 0}%`;
