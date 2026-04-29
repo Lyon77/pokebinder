@@ -26,7 +26,8 @@ const FIRST_ED_SETS = new Set([
 
 // Era cutoffs by ISO release date.
 // - preReverse: pre-Legendary Collection (no reverse foils)
-// - earlyReverse: LC + e-Card era (reverse foils on Common/Uncommon/Rare only)
+// - earlyReverse: LC + e-Card era (reverse foils on Common/Uncommon/Rare AND
+//   Rare Holo; no reverse foils on special rarities like Crystal/Rare Secret)
 // - modern: EX onwards (reverse foils on Common/Uncommon/Rare AND Rare Holo)
 const LC_RELEASE = '2002-05-24';
 const EX_RELEASE = '2003-06-01';
@@ -90,7 +91,8 @@ function variantsForEra(era, category, setId) {
   }
 
   if (era === 'earlyReverse') {
-    if (category === 'rareHolo' || category === 'special') return ['holofoil'];
+    if (category === 'special') return ['holofoil'];
+    if (category === 'rareHolo') return ['holofoil', 'reverseHolofoil'];
     return ['normal', 'reverseHolofoil'];
   }
 
