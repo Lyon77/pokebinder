@@ -19,6 +19,7 @@ import {
   defaultCollectionRecord,
   parseBundle, rehydrateBundle, reconcileBundleToIDB,
   pushBundle, currentBundleJson, saveCollectionRecord, deleteCollectionRecord,
+  setSaveErrorCallback,
 } from './storage.js';
 import {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
@@ -2136,6 +2137,38 @@ function showSyncIndicator(status, message) {
 }
 
 setStatusCallback(showSyncIndicator);
+
+const saveErrorBanner = document.getElementById('save-error-banner');
+
+function showSaveErrorBanner(err) {
+  if (!saveErrorBanner) return;
+  const isQuota = err && (err.name === 'QuotaExceededError' || /quota/i.test(err.message || ''));
+  saveErrorBanner.innerHTML = isQuota
+    ? '<span class="save-error-msg">Storage is full — your last change wasn\'t saved. Free space by clearing the cached card metadata (it will re-fetch on demand).</span>'
+      + '<button class="btn btn-small" id="save-error-clear-cache">Clear card cache</button>'
+      + '<button class="btn btn-small" id="save-error-dismiss">Dismiss</button>'
+    : '<span class="save-error-msg">Couldn\'t save your last change. Try reloading to recover.</span>'
+      + '<button class="btn btn-small" id="save-error-dismiss">Dismiss</button>';
+  saveErrorBanner.hidden = false;
+
+  const dismissBtn = document.getElementById('save-error-dismiss');
+  if (dismissBtn) dismissBtn.addEventListener('click', () => { saveErrorBanner.hidden = true; });
+
+  const clearBtn = document.getElementById('save-error-clear-cache');
+  if (clearBtn) clearBtn.addEventListener('click', async () => {
+    clearBtn.disabled = true;
+    clearBtn.textContent = 'Clearing...';
+    try {
+      await clearAllTcgCache();
+      saveErrorBanner.hidden = true;
+    } catch {
+      clearBtn.disabled = false;
+      clearBtn.textContent = 'Clear card cache';
+    }
+  });
+}
+
+setSaveErrorCallback(showSaveErrorBanner);
 
 async function handleRemoteData(raw, { mode = 'reconcile', priorityIds } = {}) {
   if (!raw || typeof raw !== 'object') return false;

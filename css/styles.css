@@ -1014,6 +1014,26 @@ main {
 .sync-indicator.error { color: var(--accent); border-color: var(--accent); }
 .sync-indicator[hidden] { display: none; }
 
+.save-error-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: #5a1a1a;
+  color: #ffe2e2;
+  border-bottom: 1px solid #8b2f2f;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+.save-error-banner[hidden] { display: none; }
+.save-error-banner .save-error-msg { flex: 1; min-width: 0; }
+.save-error-banner .btn { font-size: 0.75rem; padding: 0.25rem 0.6rem; }
+
 /* ---- Collection Switcher ---- */
 .collection-switcher { position: relative; }
 .collection-title {

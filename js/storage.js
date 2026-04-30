@@ -12,6 +12,10 @@ const DEFAULT_BOOKS = [
 ];
 
 let activeCollectionId = localStorage.getItem(ACTIVE_COLLECTION_KEY) || DEFAULT_COLLECTION_ID;
+let onSaveError = null;
+
+function setSaveErrorCallback(cb) { onSaveError = cb; }
+function reportSaveError(err) { if (onSaveError) onSaveError(err); }
 
 function getActiveCollectionId() { return activeCollectionId; }
 
@@ -122,9 +126,14 @@ async function loadState() {
 }
 
 async function saveState(state) {
-  const record = stateToRecord(state);
-  await saveCollection(record);
-  await pushBundle(state);
+  try {
+    const record = stateToRecord(state);
+    await saveCollection(record);
+    await pushBundle(state);
+  } catch (err) {
+    reportSaveError(err);
+    throw err;
+  }
 }
 
 function serializeState(state) {
@@ -363,13 +372,23 @@ async function currentBundleJson() {
 }
 
 async function saveCollectionRecord(record) {
-  await saveCollection(record);
-  await pushBundle(null);
+  try {
+    await saveCollection(record);
+    await pushBundle(null);
+  } catch (err) {
+    reportSaveError(err);
+    throw err;
+  }
 }
 
 async function deleteCollectionRecord(id) {
-  await deleteCollection(id);
-  await pushBundle(null);
+  try {
+    await deleteCollection(id);
+    await pushBundle(null);
+  } catch (err) {
+    reportSaveError(err);
+    throw err;
+  }
 }
 
 // Reconcile the pulled bundle with IndexedDB.
@@ -574,4 +593,5 @@ export {
   // Bundle sync (v2)
   parseBundle, rehydrateBundle, reconcileBundleToIDB,
   pushBundle, currentBundleJson, saveCollectionRecord, deleteCollectionRecord,
+  setSaveErrorCallback,
 };
