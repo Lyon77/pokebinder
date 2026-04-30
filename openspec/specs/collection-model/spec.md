@@ -97,17 +97,6 @@ When a bundle is pulled from the Gist, the system SHALL rehydrate each card refe
 - **WHEN** a pulled card's metadata cannot be fetched (offline, API error)
 - **THEN** the state retains the card as `{ cardId }` and the binder renders a spinner placeholder for that slot
 
-### Requirement: Legacy v1 payload auto-migration
-When a pull returns a payload without the `v` field (a legacy single-collection record), the system SHALL migrate it to a v2 bundle containing that one collection, union it with any local collections not present in the legacy payload, and schedule a v2 bundle push.
-
-#### Scenario: Legacy load
-- **WHEN** a device pulls a v1 payload on first load after this change ships
-- **THEN** the app operates normally using the migrated v2 bundle in memory, and the next mutation pushes the v2 bundle to the Gist
-
-#### Scenario: Legacy + extra local collections
-- **WHEN** the Gist holds a v1 payload for Collection A and local IndexedDB also holds Collection B (created before sync was configured)
-- **THEN** the migrated bundle contains both A and B, and the next push preserves both remotely
-
 ### Requirement: Active collection is per-device
 The `activeCollectionId` SHALL be stored in localStorage and SHALL NOT be synchronized across devices. The bundle MAY include an `activeId` hint that SHALL be used only when localStorage has no active ID set (first-ever-load on a new device).
 

@@ -11,7 +11,6 @@ const DEFAULT_BOOKS = [
   { generations: [...ALL_GENERATIONS] },
 ];
 
-let skipSync = false;
 let activeCollectionId = localStorage.getItem(ACTIVE_COLLECTION_KEY) || DEFAULT_COLLECTION_ID;
 
 function getActiveCollectionId() { return activeCollectionId; }
@@ -126,18 +125,6 @@ async function saveState(state) {
   const record = stateToRecord(state);
   await saveCollection(record);
   await pushBundle(state);
-}
-
-async function currentBundleObject(state) {
-  const collections = await getAllCollectionsFull();
-  const settings = { binderFlow: (state && state.binderFlow) || loadSettings().binderFlow };
-  return buildBundle(activeCollectionId, settings, collections);
-}
-
-async function saveStateLocal(state) {
-  skipSync = true;
-  await saveState(state);
-  skipSync = false;
 }
 
 function serializeState(state) {
@@ -267,45 +254,6 @@ function parseBundle(raw) {
   return null;
 }
 
-function isLegacyV1(raw) {
-  return !!(raw && typeof raw === 'object' && raw.v !== BUNDLE_VERSION && Array.isArray(raw.caught));
-}
-
-function migrateV1ToV2(v1, localCollectionsFull = []) {
-  const v1Record = {
-    id: v1.id,
-    name: v1.name,
-    type: v1.type || 'pokedex',
-    layout: v1.layout || '3x3',
-    caught: v1.caught || [],
-    books: v1.books || [...DEFAULT_BOOKS],
-    generations: v1.generations,
-    cardSelections: v1.cardSelections,
-    disabledCategories: v1.disabledCategories,
-    excludedForms: v1.excludedForms,
-    sets: v1.sets,
-    slotList: v1.slotList,
-    slots: v1.slots,
-    pageCount: v1.pageCount,
-  };
-
-  const seen = new Set([v1Record.id]);
-  const collections = [v1Record];
-  for (const local of localCollectionsFull) {
-    if (local && local.id && !seen.has(local.id)) {
-      seen.add(local.id);
-      collections.push(local);
-    }
-  }
-
-  return {
-    v: BUNDLE_VERSION,
-    activeId: v1.id,
-    settings: { binderFlow: v1.binderFlow || 'page' },
-    collections: collections.map(compactCollection),
-  };
-}
-
 function collectCardIds(record) {
   const ids = [];
   const type = record.type || 'pokedex';
@@ -398,7 +346,7 @@ async function rehydrateBundle(bundleCollections, { priorityIds } = {}) {
 }
 
 async function pushBundle(stateForSettings) {
-  if (!isSyncConfigured() || skipSync) return;
+  if (!isSyncConfigured()) return;
   const collections = await getAllCollectionsFull();
   const settings = {
     binderFlow: (stateForSettings && stateForSettings.binderFlow) || loadSettings().binderFlow,
@@ -605,7 +553,7 @@ async function resetCaught(state) {
 }
 
 export {
-  loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
+  loadState, saveState, loadStateFromData,
   loadSettings, saveSettings,
   getActiveCollectionId, setActiveCollectionId,
   toggleCaught, toggleCategory, toggleExcludedForm,
@@ -616,6 +564,6 @@ export {
   exportState, importState, resetCaught,
   defaultCollectionRecord,
   // Bundle sync (v2)
-  parseBundle, isLegacyV1, migrateV1ToV2, rehydrateBundle, reconcileBundleToIDB,
-  pushBundle, currentBundleObject, saveCollectionRecord, deleteCollectionRecord,
+  parseBundle, rehydrateBundle, reconcileBundleToIDB,
+  pushBundle, saveCollectionRecord, deleteCollectionRecord,
 };

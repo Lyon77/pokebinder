@@ -8,7 +8,7 @@ import { renderListView, updateListCaughtState } from './render.js';
 import { renderBinderView, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews } from './binder.js';
 import { computeStats, computeMasterStats, renderStats, renderMasterStats } from './stats.js';
 import {
-  loadState, saveState, saveStateLocal, serializeState, loadStateFromData,
+  loadState, saveState, loadStateFromData,
   loadSettings, saveSettings,
   getActiveCollectionId, setActiveCollectionId,
   toggleCaught, toggleCategory, toggleExcludedForm,
@@ -17,8 +17,8 @@ import {
   saveBooks, addSetToCollection, removeSetFromCollection,
   exportState, importState, resetCaught,
   defaultCollectionRecord,
-  parseBundle, isLegacyV1, migrateV1ToV2, rehydrateBundle, reconcileBundleToIDB,
-  currentBundleObject, pushBundle, saveCollectionRecord, deleteCollectionRecord,
+  parseBundle, rehydrateBundle, reconcileBundleToIDB,
+  pushBundle, saveCollectionRecord, deleteCollectionRecord,
 } from './storage.js';
 import {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
@@ -2138,13 +2138,7 @@ setStatusCallback(showSyncIndicator);
 
 async function handleRemoteData(raw, { mode = 'reconcile', priorityIds } = {}) {
   if (!raw || typeof raw !== 'object') return false;
-  let bundle = parseBundle(raw);
-  let needsMigrationPush = false;
-  if (!bundle && isLegacyV1(raw)) {
-    const localCollections = await getAllCollectionsFull();
-    bundle = migrateV1ToV2(raw, localCollections);
-    needsMigrationPush = true;
-  }
+  const bundle = parseBundle(raw);
   if (!bundle) return false;
 
   const { records: rehydrated, stubsRemain } = await rehydrateBundle(bundle.collections, { priorityIds });
@@ -2152,7 +2146,7 @@ async function handleRemoteData(raw, { mode = 'reconcile', priorityIds } = {}) {
   // If we kept local-only collections during union, schedule a push so the
   // remote catches up. This prevents a situation where a locally-created
   // collection gets silently lost because the gist still had an older bundle.
-  if (mode === 'union' && hadLocalOnly) needsMigrationPush = true;
+  const needsBundlePush = mode === 'union' && hadLocalOnly;
 
   if (bundle.settings && bundle.settings.binderFlow) {
     saveSettings({ binderFlow: bundle.settings.binderFlow });
@@ -2173,13 +2167,13 @@ async function handleRemoteData(raw, { mode = 'reconcile', priorityIds } = {}) {
   // clobber them. The pending push will propagate the user's state to the gist.
   if (!hasPendingLocalChange()) state = await loadState();
 
-  return { handled: true, needsMigrationPush, stubsRemain };
+  return { handled: true, needsBundlePush, stubsRemain };
 }
 
 setRemoteChangeCallback(async (data) => {
   const result = await handleRemoteData(data);
   if (result && result.handled) {
-    if (result.needsMigrationPush) await pushBundle(state);
+    if (result.needsBundlePush) await pushBundle(state);
     updateTypeAwareControls();
     binderFlowCheck.checked = state.binderFlow === 'row';
     rebuildCollection();
@@ -2218,7 +2212,7 @@ syncSaveBtn.addEventListener('click', async () => {
       const result = await handleRemoteData(gist.data, { mode: 'union' });
       if (result && result.handled) {
         setLastSavedJson(gist.raw);
-        if (result.needsMigrationPush) await pushBundle(state);
+        if (result.needsBundlePush) await pushBundle(state);
         updateTypeAwareControls();
         binderFlowCheck.checked = state.binderFlow === 'row';
         rebuildCollection();
@@ -2331,7 +2325,7 @@ async function reconcileFromGist() {
       });
       if (result1 && result1.handled) {
         setLastSavedJson(gist.raw);
-        if (result1.needsMigrationPush) await pushBundle(state);
+        if (result1.needsBundlePush) await pushBundle(state);
         renderAll();
       } else {
         setLastSavedJson(gist.raw);
@@ -2342,7 +2336,7 @@ async function reconcileFromGist() {
       if (result1 && result1.handled && result1.stubsRemain) {
         const result2 = await handleRemoteData(gist.data, { mode: 'union' });
         if (result2 && result2.handled) {
-          if (result2.needsMigrationPush) await pushBundle(state);
+          if (result2.needsBundlePush) await pushBundle(state);
           renderAll();
         }
       }
@@ -2380,7 +2374,7 @@ document.addEventListener('visibilitychange', async () => {
       const result = await handleRemoteData(gist.data, { mode: 'union' });
       if (result && result.handled) {
         setLastSavedJson(gist.raw);
-        if (result.needsMigrationPush) await pushBundle(state);
+        if (result.needsBundlePush) await pushBundle(state);
         updateTypeAwareControls();
         rebuildCollection();
       }
