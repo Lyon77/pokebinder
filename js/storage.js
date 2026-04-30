@@ -354,6 +354,14 @@ async function pushBundle(stateForSettings) {
   scheduleSave(buildBundle(activeCollectionId, settings, collections));
 }
 
+// Build the bundle JSON the next push would emit, without scheduling it.
+// Used to gate the unload-stash flush against post-close IDB changes.
+async function currentBundleJson() {
+  const collections = await getAllCollectionsFull();
+  const settings = { binderFlow: loadSettings().binderFlow };
+  return serializeBundle(activeCollectionId, settings, collections);
+}
+
 async function saveCollectionRecord(record) {
   await saveCollection(record);
   await pushBundle(null);
@@ -565,5 +573,5 @@ export {
   defaultCollectionRecord,
   // Bundle sync (v2)
   parseBundle, rehydrateBundle, reconcileBundleToIDB,
-  pushBundle, saveCollectionRecord, deleteCollectionRecord,
+  pushBundle, currentBundleJson, saveCollectionRecord, deleteCollectionRecord,
 };

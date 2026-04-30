@@ -18,13 +18,14 @@ import {
   exportState, importState, resetCaught,
   defaultCollectionRecord,
   parseBundle, rehydrateBundle, reconcileBundleToIDB,
-  pushBundle, saveCollectionRecord, deleteCollectionRecord,
+  pushBundle, currentBundleJson, saveCollectionRecord, deleteCollectionRecord,
 } from './storage.js';
 import {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
   hasPendingLocalChange,
   setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
   loadFromGist, cancelPendingSave, startPolling, stopPolling,
+  flushStashedPending,
 } from './sync.js';
 import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, hydrateCards, ensureOverridesLoaded } from './tcg-api.js';
 import { getAllCollections, getAllCollectionsFull, clearAllTcgCache } from './db.js';
@@ -2308,6 +2309,12 @@ function getVisibleCardIds() {
 
 async function reconcileFromGist() {
   try {
+    // Replay any push that was stashed by a prior tab-close before pulling.
+    // Without this, edits made within the 5s push debounce window before
+    // close would be silently rolled back when the older remote bundle is
+    // pulled in. The stash is dropped if local IDB has diverged from it.
+    await flushStashedPending(await currentBundleJson());
+
     const gist = await loadFromGist();
     if (gist && gist.data) {
       // Page load: use union mode so collections created locally but

@@ -1,5 +1,7 @@
 const SYNC_PAT_KEY = 'pokebinder-sync-pat';
 const SYNC_GIST_KEY = 'pokebinder-sync-gist-id';
+const SYNC_PENDING_KEY = 'pokebinder-sync-pending-bundle';
+const SYNC_PENDING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const SAVE_DEBOUNCE_MS = 5000;
 
 let syncPat = localStorage.getItem(SYNC_PAT_KEY) || '';
@@ -36,6 +38,7 @@ function clearSyncConfig() {
   syncGistId = '';
   localStorage.removeItem(SYNC_PAT_KEY);
   localStorage.removeItem(SYNC_GIST_KEY);
+  localStorage.removeItem(SYNC_PENDING_KEY);
 }
 
 function setStatusCallback(cb) {
@@ -127,7 +130,8 @@ async function saveToGist(serialized) {
     if (pendingJson === serialized) pendingJson = null;
     emitStatus('synced', 'Synced');
   } catch (err) {
-    if (pendingJson === serialized) pendingJson = null;
+    // Keep pendingJson so the next scheduleSave or beforeunload stash can
+    // retry. Clearing it on transient errors silently dropped queued edits.
     emitStatus('error', 'Save failed');
     console.error('Gist save failed:', err);
   }
@@ -218,10 +222,67 @@ function cancelPendingSave() {
   pendingJson = null;
 }
 
+// --- Pending-bundle stash (survives tab close) ---
+//
+// If the tab dies during the 5s debounce window (or with a transient push
+// failure unflushed), the queued bundle would otherwise be lost. We mirror
+// pendingJson into localStorage on `beforeunload` and replay it at startup.
+
+function stashPendingOnUnload() {
+  if (pendingJson === null) {
+    localStorage.removeItem(SYNC_PENDING_KEY);
+    return;
+  }
+  try {
+    localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify({
+      bundle: pendingJson,
+      ts: Date.now(),
+    }));
+  } catch { /* localStorage full — best-effort */ }
+}
+
+function readStashedPending() {
+  const raw = localStorage.getItem(SYNC_PENDING_KEY);
+  if (!raw) return null;
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch { localStorage.removeItem(SYNC_PENDING_KEY); return null; }
+  if (!parsed || typeof parsed.bundle !== 'string' || typeof parsed.ts !== 'number'
+      || Date.now() - parsed.ts > SYNC_PENDING_TTL_MS) {
+    localStorage.removeItem(SYNC_PENDING_KEY);
+    return null;
+  }
+  return parsed.bundle;
+}
+
+// Push any stashed pending bundle to the gist. If `currentBundleJson` is
+// supplied and the stash no longer matches the local state (e.g., user
+// edited collections in another session), the stash is dropped — current
+// state wins. Returns true if the stash was successfully pushed.
+async function flushStashedPending(currentBundleJson) {
+  if (!isSyncConfigured()) return false;
+  const stash = readStashedPending();
+  if (stash === null) return false;
+  if (currentBundleJson && stash !== currentBundleJson) {
+    localStorage.removeItem(SYNC_PENDING_KEY);
+    return false;
+  }
+  pendingJson = stash;
+  await saveToGist(stash);
+  if (pendingJson === null) {
+    localStorage.removeItem(SYNC_PENDING_KEY);
+    return true;
+  }
+  return false;
+}
+
+window.addEventListener('beforeunload', stashPendingOnUnload);
+
 export {
   isSyncConfigured, getSyncConfig, setSyncConfig, clearSyncConfig,
   hasPendingLocalChange,
   setStatusCallback, setRemoteChangeCallback, setLastSavedJson,
   loadFromGist, saveToGist, scheduleSave, cancelPendingSave,
   startPolling, stopPolling,
+  flushStashedPending,
 };
