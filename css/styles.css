@@ -65,6 +65,37 @@ body {
 .led-yellow { background: radial-gradient(circle at 40% 40%, #ffee66, #ccaa00); box-shadow: 0 0 4px rgba(255,204,0,0.5); }
 .led-green { background: radial-gradient(circle at 40% 40%, #66ff66, #00aa00); box-shadow: 0 0 4px rgba(0,255,0,0.5); }
 
+/* ---- LED state animations (driven by sync + save state in app.js) ---- */
+.led-big.alive {
+  animation: ledHeartbeat 2.5s ease-in-out infinite;
+}
+.led-small.led-yellow.active {
+  animation: ledPulseYellow 0.9s ease-in-out infinite;
+}
+.led-small.led-red.active {
+  animation: ledFlashRed 0.55s steps(2, jump-none) infinite;
+}
+.led-small.led-green {
+  filter: brightness(0.45) saturate(0.6);
+  transition: filter 0.3s, box-shadow 0.3s;
+}
+.led-small.led-green.active {
+  filter: brightness(1.1);
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
+}
+@keyframes ledHeartbeat {
+  0%, 90%, 100% { box-shadow: 0 0 8px rgba(51,136,255,0.5); }
+  45%           { box-shadow: 0 0 16px rgba(51,136,255,0.95); }
+}
+@keyframes ledPulseYellow {
+  0%, 100% { filter: brightness(0.7); box-shadow: 0 0 4px rgba(255,204,0,0.4); }
+  50%      { filter: brightness(1.3); box-shadow: 0 0 14px rgba(255,204,0,0.9); }
+}
+@keyframes ledFlashRed {
+  0%, 49%   { filter: brightness(1.4); box-shadow: 0 0 12px rgba(255, 0, 0, 1); }
+  50%, 100% { filter: brightness(0.3); box-shadow: 0 0 2px rgba(255, 0, 0, 0.2); }
+}
+
 main {
   background: var(--bg);
   box-shadow: inset 0 0 30px rgba(0,0,0,0.5);
@@ -302,6 +333,8 @@ main {
   align-items: center;
   gap: 0.4rem;
   padding: 0.35rem 0.65rem;
+  position: relative;
+  overflow: hidden;
   border-bottom: 1px solid rgba(0,255,136,0.06);
   border-right: 1px solid rgba(0,255,136,0.06);
   cursor: pointer;
@@ -1236,6 +1269,33 @@ main {
 }
 .binder-slot.caught .slot-variant-label { color: var(--caught-border); opacity: 0.7; }
 
+/* ---- Caught scan-and-lock-in animation ---- */
+/* When a slot/row transitions from uncaught -> caught, app.js briefly adds
+   the .scanning class. A green band sweeps across, leaving the caught state
+   behind. Pure visual flourish; class is removed on a 380ms timeout. */
+.binder-slot.scanning::before,
+.pokemon-row.scanning::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(var(--accent-glow-rgb), 0) 30%,
+    rgba(var(--accent-glow-rgb), 0.55) 50%,
+    rgba(var(--accent-glow-rgb), 0) 70%,
+    transparent 100%);
+  transform: translateX(-100%);
+  animation: scanSweep 350ms ease-out forwards;
+  z-index: 2;
+}
+.binder-slot.scanning {
+  box-shadow: 0 0 18px rgba(var(--accent-glow-rgb), 0.45);
+}
+@keyframes scanSweep {
+  to { transform: translateX(100%); }
+}
+
 /* ---- Reduced motion ---- */
 /* Disable non-essential animations for users who request reduced motion.
    The loading spinner is intentionally preserved — a static spinner reads
@@ -1244,6 +1304,19 @@ main {
   .pokemon-row.highlight-pulse,
   .binder-slot.highlight-pulse {
     animation: none;
+  }
+  .led-big.alive,
+  .led-small.led-yellow.active,
+  .led-small.led-red.active {
+    animation: none;
+  }
+  .binder-slot.scanning::before,
+  .pokemon-row.scanning::before {
+    animation: none;
+    opacity: 0;
+  }
+  .binder-slot.scanning {
+    box-shadow: none;
   }
 }
 

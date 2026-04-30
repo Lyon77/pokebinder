@@ -218,11 +218,20 @@ function updateTypeAwareControls() {
 
 let lastTouchedFormId = null;
 
+function flashScan(container, slotId) {
+  const el = container.querySelector(`[data-form-id="${CSS.escape(String(slotId))}"]`);
+  if (!el) return;
+  el.classList.add('scanning');
+  setTimeout(() => el.classList.remove('scanning'), 380);
+}
+
 function handleToggleCaught(slotId) {
   if (currentView === 'list') lastTouchedFormId = slotId;
   toggleCaught(state, slotId);
+  const becameCaught = state.caught.has(slotId);
   if (currentView === 'list') {
     updateListCaughtState(pokemonListEl, state.caught);
+    if (becameCaught) flashScan(pokemonListEl, slotId);
   } else {
     const cardSels = state.type === 'pokedex' ? (state.cardSelections || {}) : {};
     const swapped = updateBinderSlot(
@@ -230,6 +239,7 @@ function handleToggleCaught(slotId) {
       cardSels, handleToggleCaught, handleSlotClick, state.type,
     );
     if (!swapped) renderBinder();
+    if (becameCaught) flashScan(binderContainerEl, slotId);
   }
   updateStats();
 }
@@ -2172,16 +2182,58 @@ const syncIndicator = document.getElementById('sync-indicator');
 
 function updateSyncButton() { syncBtn.classList.toggle('connected', isSyncConfigured()); }
 
+// ---- Device-top LED state ----
+// The four chrome LEDs reflect live device state instead of being decoration:
+//   big    — slow heartbeat, always on (the device is "powered")
+//   yellow — pulses while sync is mid-flight (loading or saving)
+//   red    — flashes on either a sync error or an IDB save failure
+//   green  — solid bright when the last sync was healthy; dim otherwise
+const ledBig = document.querySelector('.device-top .led-big');
+const ledYellow = document.querySelector('.device-top .led-yellow');
+const ledRed = document.querySelector('.device-top .led-red');
+const ledGreen = document.querySelector('.device-top .led-green');
+
+const ledState = { syncing: false, synced: false, syncError: false, saveError: false };
+
+function refreshLeds() {
+  if (ledYellow) ledYellow.classList.toggle('active', ledState.syncing);
+  if (ledRed) ledRed.classList.toggle('active', ledState.syncError || ledState.saveError);
+  if (ledGreen) ledGreen.classList.toggle('active',
+    ledState.synced && !ledState.syncError && !ledState.saveError);
+}
+
+if (ledBig) ledBig.classList.add('alive');
+refreshLeds();
+
 function showSyncIndicator(status, message) {
   syncIndicator.textContent = message;
   syncIndicator.className = 'sync-indicator ' + status;
   syncIndicator.hidden = false;
   if (status === 'synced') setTimeout(() => { syncIndicator.hidden = true; }, 2000);
+
+  if (status === 'loading' || status === 'saving') {
+    ledState.syncing = true;
+    ledState.syncError = false;
+  } else if (status === 'synced') {
+    ledState.syncing = false;
+    ledState.synced = true;
+    ledState.syncError = false;
+  } else if (status === 'error') {
+    ledState.syncing = false;
+    ledState.syncError = true;
+  }
+  refreshLeds();
 }
 
 setStatusCallback(showSyncIndicator);
 
 const saveErrorBanner = document.getElementById('save-error-banner');
+
+function dismissSaveErrorBanner() {
+  if (saveErrorBanner) saveErrorBanner.hidden = true;
+  ledState.saveError = false;
+  refreshLeds();
+}
 
 function showSaveErrorBanner(err) {
   if (!saveErrorBanner) return;
@@ -2193,9 +2245,11 @@ function showSaveErrorBanner(err) {
     : '<span class="save-error-msg">Couldn\'t save your last change. Try reloading to recover.</span>'
       + '<button class="btn btn-small" id="save-error-dismiss">Dismiss</button>';
   saveErrorBanner.hidden = false;
+  ledState.saveError = true;
+  refreshLeds();
 
   const dismissBtn = document.getElementById('save-error-dismiss');
-  if (dismissBtn) dismissBtn.addEventListener('click', () => { saveErrorBanner.hidden = true; });
+  if (dismissBtn) dismissBtn.addEventListener('click', dismissSaveErrorBanner);
 
   const clearBtn = document.getElementById('save-error-clear-cache');
   if (clearBtn) clearBtn.addEventListener('click', async () => {
@@ -2203,7 +2257,7 @@ function showSaveErrorBanner(err) {
     clearBtn.textContent = 'Clearing...';
     try {
       await clearAllTcgCache();
-      saveErrorBanner.hidden = true;
+      dismissSaveErrorBanner();
     } catch {
       clearBtn.disabled = false;
       clearBtn.textContent = 'Clear card cache';
