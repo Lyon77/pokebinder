@@ -1307,7 +1307,11 @@ function searchMatches(query) {
 function renderSearchDropdown(results) {
   searchDropdown.innerHTML = '';
   if (results.length === 0) {
-    searchDropdown.hidden = true;
+    const empty = document.createElement('div');
+    empty.className = 'search-no-signal';
+    empty.textContent = 'NO SIGNAL — no entries match';
+    searchDropdown.appendChild(empty);
+    searchDropdown.hidden = false;
     return;
   }
   for (let i = 0; i < results.length; i++) {
