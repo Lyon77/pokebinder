@@ -5,7 +5,7 @@
   --surface: #0f1e38;
   --surface-alt: #162840;
   --text: #e0e0e0;
-  --text-muted: #557788;
+  --text-muted: #7799bb;
   --accent: #ff3333;
   --accent-dim: #cc2222;
   --caught-bg: #0a2018;
@@ -293,6 +293,10 @@ main {
 }
 .pokemon-row:hover { background: rgba(0,255,136,0.05); }
 .pokemon-row:focus { outline: 1px solid var(--caught-border); outline-offset: -1px; }
+.pokemon-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--caught-border), 0 0 12px rgba(0, 255, 68, 0.35);
+}
 .pokemon-row.highlight-pulse { animation: rowPulse 4s ease-out; }
 @keyframes rowPulse {
   0% { background: rgba(255,51,51,0.5); box-shadow: inset 0 0 10px rgba(255,51,51,0.3); }
@@ -433,6 +437,10 @@ main {
 }
 .binder-slot:hover { border-color: var(--caught-border); box-shadow: 0 0 8px rgba(0,255,136,0.2); }
 .binder-slot:focus { outline: 1px solid var(--caught-border); outline-offset: -1px; }
+.binder-slot:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--caught-border), 0 0 12px rgba(0, 255, 68, 0.35);
+}
 .binder-slot.caught {
   border-color: var(--caught-border);
   background: rgba(0,40,20,0.5);
@@ -506,6 +514,10 @@ main {
 }
 .card-picker-item:hover { border-color: var(--accent); transform: translateY(-2px); }
 .card-picker-item:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+.card-picker-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent), 0 0 12px rgba(255, 51, 51, 0.35);
+}
 .card-picker-item.selected { border-color: var(--caught-border); box-shadow: 0 0 0 2px var(--caught-border); }
 .card-picker-item img {
   width: 100%;
@@ -1206,4 +1218,15 @@ main {
   overflow: hidden; text-overflow: ellipsis;
 }
 .binder-slot.caught .slot-variant-label { color: var(--caught-border); opacity: 0.7; }
+
+/* ---- Reduced motion ---- */
+/* Disable non-essential animations for users who request reduced motion.
+   The loading spinner is intentionally preserved — a static spinner reads
+   as "broken," and motion is the feedback there. */
+@media (prefers-reduced-motion: reduce) {
+  .pokemon-row.highlight-pulse,
+  .binder-slot.highlight-pulse {
+    animation: none;
+  }
+}
 
