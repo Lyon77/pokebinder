@@ -28,7 +28,7 @@
           <input type="file" id="import-input" accept=".json" hidden>
         </label>
         <button id="sync-btn" class="btn btn-sync" title="Cloud sync settings">Sync</button>
-        <button id="reset-btn" class="btn btn-danger" title="Reset all progress">Reset</button>
+        <button id="reset-btn" class="btn btn-danger" title="Mark all slots as uncaught (keeps card picks, books, and layout)">Reset</button>
       </div>
     </div>
 
@@ -271,6 +271,11 @@
   <div id="sync-indicator" class="sync-indicator" hidden></div>
 
   <div id="save-error-banner" class="save-error-banner" hidden></div>
+
+  <div id="undo-toast" class="undo-toast" hidden>
+    <span id="undo-toast-msg" class="undo-toast-msg"></span>
+    <button id="undo-toast-action" class="btn btn-small">Undo</button>
+  </div>
 
   <script type="module" src="js/app.js?v=2026-04-20-g"></script>
 </body>

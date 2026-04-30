@@ -1745,23 +1745,49 @@ cardPickerSave.addEventListener('click', () => {
   restorePickerFocus();
 });
 
-cardPickerClear.addEventListener('click', () => {
+cardPickerClear.addEventListener('click', async () => {
+  let undoFn = null;
   if (pickerFormId) {
+    const formId = pickerFormId;
+    const collectionId = state.collectionId;
     if (state.type === 'freestyle') {
-      clearFreestyleSlot(state, parseInt(pickerFormId, 10));
+      const idx = parseInt(formId, 10);
+      const prevSlot = state.slots ? state.slots[idx] : null;
+      const wasCaught = state.caught.has(String(idx));
+      await clearFreestyleSlot(state, idx);
       rebuildCollection();
+      if (prevSlot) undoFn = async () => {
+        if (state.collectionId !== collectionId) return;
+        await setFreestyleSlot(state, idx, prevSlot);
+        if (wasCaught) state.caught.add(String(idx));
+        await saveState(state);
+        rebuildCollection();
+        renderBinder();
+        updateStats();
+      };
     } else {
-      clearCardSelection(state, pickerFormId);
-      if (state.caught.has(pickerFormId)) {
-        state.caught.delete(pickerFormId);
-        saveState(state);
+      const prevSelection = state.cardSelections ? state.cardSelections[formId] : null;
+      const wasCaught = state.caught.has(formId);
+      await clearCardSelection(state, formId);
+      if (wasCaught) {
+        state.caught.delete(formId);
+        await saveState(state);
       }
+      if (prevSelection || wasCaught) undoFn = async () => {
+        if (state.collectionId !== collectionId) return;
+        if (prevSelection) await setCardSelection(state, formId, prevSelection);
+        if (wasCaught) state.caught.add(formId);
+        await saveState(state);
+        renderCurrentView();
+        updateStats();
+      };
     }
   }
   closeCardPicker();
   renderBinder();
   updateStats();
   restorePickerFocus();
+  if (undoFn) showUndoToast('Cleared.', undoFn);
 });
 
 function onActionButtonKeydown(e) {
@@ -2099,11 +2125,21 @@ importInput.addEventListener('change', async (e) => {
   } catch (err) { alert('Import failed: ' + err.message); }
   importInput.value = '';
 });
-resetBtn.addEventListener('click', () => {
-  if (confirm('Reset all progress? This will mark everything as uncaught.')) {
-    resetCaught(state);
-    renderCurrentView();
-    updateStats();
+resetBtn.addEventListener('click', async () => {
+  if (!confirm('Mark every slot as uncaught? Card picks, books, and layout are kept.')) return;
+  const snapshot = new Set(state.caught);
+  const collectionId = state.collectionId;
+  await resetCaught(state);
+  renderCurrentView();
+  updateStats();
+  if (snapshot.size > 0) {
+    showUndoToast(`Reset ${snapshot.size} slot${snapshot.size === 1 ? '' : 's'}.`, async () => {
+      if (state.collectionId !== collectionId) return;
+      state.caught = snapshot;
+      await saveState(state);
+      renderCurrentView();
+      updateStats();
+    });
   }
 });
 
@@ -2169,6 +2205,34 @@ function showSaveErrorBanner(err) {
 }
 
 setSaveErrorCallback(showSaveErrorBanner);
+
+const undoToast = document.getElementById('undo-toast');
+const undoToastMsg = document.getElementById('undo-toast-msg');
+const undoToastAction = document.getElementById('undo-toast-action');
+let undoToastTimer = null;
+let pendingUndoFn = null;
+
+function showUndoToast(message, undoFn, durationMs = 5000) {
+  if (!undoToast || !undoToastMsg || !undoToastAction) return;
+  undoToastMsg.textContent = message;
+  pendingUndoFn = undoFn;
+  undoToast.hidden = false;
+  clearTimeout(undoToastTimer);
+  undoToastTimer = setTimeout(() => {
+    undoToast.hidden = true;
+    pendingUndoFn = null;
+  }, durationMs);
+}
+
+if (undoToastAction) {
+  undoToastAction.addEventListener('click', async () => {
+    const fn = pendingUndoFn;
+    pendingUndoFn = null;
+    clearTimeout(undoToastTimer);
+    if (undoToast) undoToast.hidden = true;
+    if (fn) await fn();
+  });
+}
 
 async function handleRemoteData(raw, { mode = 'reconcile', priorityIds } = {}) {
   if (!raw || typeof raw !== 'object') return false;

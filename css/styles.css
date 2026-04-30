@@ -1034,6 +1034,26 @@ main {
 .save-error-banner .save-error-msg { flex: 1; min-width: 0; }
 .save-error-banner .btn { font-size: 0.75rem; padding: 0.25rem 0.6rem; }
 
+.undo-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.undo-toast[hidden] { display: none; }
+.undo-toast .undo-toast-msg { color: var(--text-muted); }
+.undo-toast .btn { font-size: 0.75rem; padding: 0.25rem 0.6rem; }
+
 /* ---- Collection Switcher ---- */
 .collection-switcher { position: relative; }
 .collection-title {
