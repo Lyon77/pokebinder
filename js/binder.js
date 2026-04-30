@@ -340,6 +340,24 @@ function renderBinderView(container, collection, viewIndex, layout, caughtSet, o
   }
 }
 
+// Surgically swap a single slot's DOM in place. Used by the toggle hot path
+// to avoid rebuilding the entire binder grid on every caught flip — full
+// rebuilds redo every slot's HTML, every image, and every listener binding.
+// Returns false if the slot isn't currently rendered (caller should fall
+// back to renderBinderView).
+function updateBinderSlot(container, slotId, collection, caughtSet, cardSelections, onToggle, onPickCard, collectionType) {
+  if (slotId === null || slotId === undefined) return false;
+  const oldSlot = container.querySelector(`[data-form-id="${CSS.escape(String(slotId))}"]`);
+  if (!oldSlot) return false;
+  const item = collection.find(p => p.formId === slotId);
+  if (!item) return false;
+  const newSlot = buildSlot(item, caughtSet, cardSelections, onToggle, onPickCard, collectionType);
+  const wasFocused = oldSlot === document.activeElement;
+  oldSlot.replaceWith(newSlot);
+  if (wasFocused) newSlot.focus();
+  return true;
+}
+
 function getTotalViews(collectionLength, layout) {
   const totalPages = getTotalPages(collectionLength, layout);
   return buildViews(totalPages).length;
@@ -355,4 +373,4 @@ function getViewPageInfo(viewIndex, collectionLength, layout) {
   return `Page ${view.pages[0] + 1} of ${totalPages}`;
 }
 
-export { renderBinderView, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews };
+export { renderBinderView, updateBinderSlot, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews };

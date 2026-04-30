@@ -5,7 +5,7 @@ import {
 } from './data.js';
 import { buildCollection, buildBookCollection } from './collection.js';
 import { renderListView, updateListCaughtState } from './render.js';
-import { renderBinderView, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews } from './binder.js';
+import { renderBinderView, updateBinderSlot, getTotalViews, getViewPageInfo, parseLayout, getTotalPages, buildViews } from './binder.js';
 import { computeStats, computeMasterStats, renderStats, renderMasterStats } from './stats.js';
 import {
   loadState, saveState, loadStateFromData,
@@ -222,7 +222,12 @@ function handleToggleCaught(slotId) {
   if (currentView === 'list') {
     updateListCaughtState(pokemonListEl, state.caught);
   } else {
-    renderBinder();
+    const cardSels = state.type === 'pokedex' ? (state.cardSelections || {}) : {};
+    const swapped = updateBinderSlot(
+      binderContainerEl, slotId, bookCollection, state.caught,
+      cardSels, handleToggleCaught, handleSlotClick, state.type,
+    );
+    if (!swapped) renderBinder();
   }
   updateStats();
 }
