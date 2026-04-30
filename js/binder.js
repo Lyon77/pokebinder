@@ -223,7 +223,7 @@ function buildFreestyleSlot(slot, p, isCaught, cardSelections, onPickCard) {
 }
 
 function gridMaxWidth(cols) {
-  return cols >= 4 ? '520px' : '400px';
+  return cols >= 4 ? '500px' : '380px';
 }
 
 function renderSinglePage(container, collection, pageIndex, layout, caughtSet, onToggle, cardSelections, onPickCard, collectionType) {
