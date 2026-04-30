@@ -673,51 +673,7 @@ main {
   justify-content: center;
   align-items: flex-start;
 }
-.binder-layout > .binder-frame { flex: 1; min-width: 0; }
-
-/* ---- Pokedex frame chrome around the binder grid ---- */
-.binder-frame {
-  position: relative;
-  padding: 0.6rem;
-  border-radius: 6px;
-  background:
-    linear-gradient(rgba(10, 22, 40, 0.35), rgba(10, 22, 40, 0.35)),
-    repeating-linear-gradient(0deg,
-      rgba(0, 255, 68, 0.022) 0px,
-      rgba(0, 255, 68, 0.022) 1px,
-      transparent 1px,
-      transparent 3px
-    );
-  box-shadow:
-    inset 0 0 0 1px var(--border),
-    inset 0 4px 14px rgba(0, 0, 0, 0.4);
-}
-.binder-corner {
-  position: absolute;
-  width: 14px; height: 14px;
-  pointer-events: none;
-  box-shadow: 0 0 6px rgba(var(--accent-glow-rgb), 0.35);
-}
-.binder-corner-tl {
-  top: 6px; left: 6px;
-  border-top: 2px solid var(--caught-border);
-  border-left: 2px solid var(--caught-border);
-}
-.binder-corner-tr {
-  top: 6px; right: 6px;
-  border-top: 2px solid var(--caught-border);
-  border-right: 2px solid var(--caught-border);
-}
-.binder-corner-bl {
-  bottom: 6px; left: 6px;
-  border-bottom: 2px solid var(--caught-border);
-  border-left: 2px solid var(--caught-border);
-}
-.binder-corner-br {
-  bottom: 6px; right: 6px;
-  border-bottom: 2px solid var(--caught-border);
-  border-right: 2px solid var(--caught-border);
-}
+.binder-layout > #binder-container { flex: 1; min-width: 0; }
 .binder-sidebar {
   width: 160px;
   flex-shrink: 0;
