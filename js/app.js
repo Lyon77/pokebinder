@@ -182,6 +182,8 @@ function updateTypeAwareControls() {
   const isPokedex = state.type === 'pokedex';
   const isFreestyle = state.type === 'freestyle';
 
+  document.body.dataset.type = state.type || 'pokedex';
+
   // Forms button: pokedex only
   formSettingsBtn.hidden = !isPokedex;
   // Books button: pokedex and master only

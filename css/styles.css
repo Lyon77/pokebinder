@@ -17,6 +17,23 @@
   --blue-led: #3388ff;
   --yellow-led: #ffcc00;
   --device-red: #cc0000;
+  --accent-glow-rgb: 0, 255, 68;
+}
+
+/* Per-collection-type accent. The default tokens in :root cover pokedex; these
+   overrides retint the active accent so master / freestyle binders feel like
+   distinct "modes" while the rest of the chrome stays consistent. */
+body[data-type="master"] {
+  --caught-bg: #062028;
+  --caught-border: #00e6ff;
+  --progress-fill: #00e6ff;
+  --accent-glow-rgb: 0, 230, 255;
+}
+body[data-type="freestyle"] {
+  --caught-bg: #261a08;
+  --caught-border: #ffaa22;
+  --progress-fill: #ffaa22;
+  --accent-glow-rgb: 255, 170, 34;
 }
 
 html { font-size: 16px; overflow-x: hidden; }
@@ -295,7 +312,7 @@ main {
 .pokemon-row:focus { outline: 1px solid var(--caught-border); outline-offset: -1px; }
 .pokemon-row:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--caught-border), 0 0 12px rgba(0, 255, 68, 0.35);
+  box-shadow: 0 0 0 2px var(--caught-border), 0 0 12px rgba(var(--accent-glow-rgb), 0.35);
 }
 .pokemon-row.highlight-pulse { animation: rowPulse 4s ease-out; }
 @keyframes rowPulse {
@@ -439,7 +456,7 @@ main {
 .binder-slot:focus { outline: 1px solid var(--caught-border); outline-offset: -1px; }
 .binder-slot:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--caught-border), 0 0 12px rgba(0, 255, 68, 0.35);
+  box-shadow: 0 0 0 2px var(--caught-border), 0 0 12px rgba(var(--accent-glow-rgb), 0.35);
 }
 .binder-slot.caught {
   border-color: var(--caught-border);
