@@ -282,6 +282,13 @@ main {
   transition: background 0.1s;
 }
 .dropdown-item:last-child { border-bottom: none; }
+.dropdown-item-meta {
+  margin-top: 0.15rem;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
 .dropdown-item:hover, .dropdown-item.active { background: var(--surface-alt); }
 .dropdown-item.caught {
   background: var(--caught-bg);

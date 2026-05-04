@@ -28,7 +28,7 @@ import {
   loadFromGist, cancelPendingSave, startPolling, stopPolling,
   flushStashedPending,
 } from './sync.js';
-import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, hydrateCards, ensureOverridesLoaded } from './tcg-api.js';
+import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, hydrateCards, ensureOverridesLoaded, getVariantLabel } from './tcg-api.js';
 import { getAllCollections, getAllCollectionsFull, clearAllTcgCache } from './db.js';
 
 // ---- View State ----
@@ -1299,7 +1299,11 @@ function searchMatches(query) {
     const nameMatch = p.name && p.name.toLowerCase().includes(q);
     const formMatch = p.formName && p.formName.toLowerCase().includes(q);
     const numMatch = String(p.id).startsWith(q);
-    if (nameMatch || formMatch || numMatch) results.push(p);
+    const setMatch = p.setName && p.setName.toLowerCase().includes(q);
+    const cardNumMatch = p.number && String(p.number).toLowerCase().includes(q);
+    const variantLabel = p.variant ? getVariantLabel(p.variant) : '';
+    const variantMatch = variantLabel && variantLabel.toLowerCase().includes(q);
+    if (nameMatch || formMatch || numMatch || setMatch || cardNumMatch || variantMatch) results.push(p);
   }
   return results;
 }
@@ -1320,10 +1324,22 @@ function renderSearchDropdown(results) {
     const item = document.createElement('div');
     item.className = 'dropdown-item' + (isCaught ? ' caught' : '') + (i === activeIndex ? ' active' : '');
     item.dataset.index = i;
-    let text = `#${p.collectionNum} ${p.name || ''}`;
-    if (p.formName) text += ` (${p.formName})`;
-    if (isCaught) text = '\u2713 ' + text;
-    item.textContent = text;
+    let primary = `#${p.collectionNum} ${p.name || ''}`;
+    if (p.formName) primary += ` (${p.formName})`;
+    if (isCaught) primary = '\u2713 ' + primary;
+    const primaryEl = document.createElement('div');
+    primaryEl.className = 'dropdown-item-primary';
+    primaryEl.textContent = primary;
+    item.appendChild(primaryEl);
+    if (p.setName) {
+      const variantLabel = p.variant ? getVariantLabel(p.variant) : '';
+      const metaParts = [`${p.setName} ${p.number || ''}`.trim()];
+      if (variantLabel) metaParts.push(variantLabel);
+      const metaEl = document.createElement('div');
+      metaEl.className = 'dropdown-item-meta';
+      metaEl.textContent = metaParts.join(' \u00b7 ');
+      item.appendChild(metaEl);
+    }
     item.addEventListener('mousedown', (e) => {
       e.preventDefault();
       selectSearchResult(p);
