@@ -1285,6 +1285,9 @@ main {
 .freestyle-empty-icon { font-size: 1.3rem; opacity: 0.3; }
 
 /* ---- Master Set List View ---- */
+.pokemon-list.master .pokemon-row {
+  grid-template-columns: 14px 44px 1fr;
+}
 .list-set-header {
   grid-column: 1 / -1;
   font-family: 'Orbitron', sans-serif;

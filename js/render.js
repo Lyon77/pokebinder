@@ -2,6 +2,7 @@ import { getVariantLabel } from './tcg-api.js';
 
 function renderListView(container, collection, caughtSet, onToggle, collectionType) {
   container.innerHTML = '';
+  container.classList.toggle('master', collectionType === 'master');
   const frag = document.createDocumentFragment();
 
   if (collectionType === 'master') {
