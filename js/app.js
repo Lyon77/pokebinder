@@ -1453,8 +1453,9 @@ document.addEventListener('click', (e) => {
 });
 
 // ---- Scroll to top ----
-window.addEventListener('scroll', () => { scrollTopBtn.hidden = window.scrollY < 300; });
-scrollTopBtn.addEventListener('click', () => { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+const mainScrollEl = document.querySelector('main');
+mainScrollEl.addEventListener('scroll', () => { scrollTopBtn.hidden = mainScrollEl.scrollTop < 300; });
+scrollTopBtn.addEventListener('click', () => { mainScrollEl.scrollTo({ top: 0, behavior: 'smooth' }); });
 
 // ---- Card Picker ----
 

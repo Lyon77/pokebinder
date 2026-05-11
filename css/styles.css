@@ -36,13 +36,15 @@ body[data-type="freestyle"] {
   --accent-glow-rgb: 255, 170, 34;
 }
 
-html { font-size: 16px; overflow-x: hidden; }
+html { font-size: 16px; height: 100%; overflow-x: hidden; }
 body {
   font-family: 'Roboto Mono', monospace;
   background: var(--device-red);
   color: var(--text);
-  min-height: 100vh;
-  overflow-x: hidden;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ---- Device Frame ---- */
@@ -53,6 +55,7 @@ body {
   align-items: center;
   gap: 0.6rem;
   border-bottom: 4px solid #990000;
+  flex-shrink: 0;
 }
 .led-big {
   width: 28px; height: 28px; border-radius: 50%;
@@ -99,16 +102,19 @@ body {
 main {
   background: var(--bg);
   box-shadow: inset 0 0 30px rgba(0,0,0,0.5);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* ---- Sticky Header ---- */
 .sticky-header {
-  position: sticky;
-  top: 0;
   z-index: 30;
   background: rgba(10,22,40,0.97);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(8px);
+  flex-shrink: 0;
 }
 .header-row {
   display: flex;
@@ -685,7 +691,7 @@ main {
   width: 160px;
   flex-shrink: 0;
   position: sticky;
-  top: 100px;
+  top: 1rem;
   background: rgba(10,22,40,0.9);
   border: 1px solid var(--text-muted);
   border-radius: var(--radius);
