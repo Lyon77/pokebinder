@@ -101,10 +101,13 @@ function loadSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return { binderFlow: parsed.binderFlow || 'page' };
+      return {
+        binderFlow: parsed.binderFlow || 'page',
+        binderHeaders: parsed.binderHeaders !== false,
+      };
     }
   } catch { /* ignore */ }
-  return { binderFlow: 'page' };
+  return { binderFlow: 'page', binderHeaders: true };
 }
 
 function saveSettings(settings) {
@@ -122,6 +125,7 @@ async function loadState() {
   const state = recordToState(record);
   const settings = loadSettings();
   state.binderFlow = settings.binderFlow;
+  state.binderHeaders = settings.binderHeaders;
   return state;
 }
 
@@ -139,6 +143,7 @@ async function saveState(state) {
 function serializeState(state) {
   const record = stateToRecord(state);
   record.binderFlow = state.binderFlow;
+  record.binderHeaders = state.binderHeaders;
   return record;
 }
 
@@ -146,6 +151,7 @@ function loadStateFromData(data) {
   if (!data || !Array.isArray(data.caught)) return null;
   const state = recordToState(data);
   state.binderFlow = data.binderFlow || 'page';
+  state.binderHeaders = data.binderHeaders !== false;
   return state;
 }
 
@@ -256,7 +262,7 @@ function parseBundle(raw) {
     return {
       v: BUNDLE_VERSION,
       activeId: raw.activeId || null,
-      settings: raw.settings || { binderFlow: 'page' },
+      settings: raw.settings || { binderFlow: 'page', binderHeaders: true },
       collections: raw.collections,
     };
   }
@@ -357,8 +363,12 @@ async function rehydrateBundle(bundleCollections, { priorityIds } = {}) {
 async function pushBundle(stateForSettings) {
   if (!isSyncConfigured()) return;
   const collections = await getAllCollectionsFull();
+  const stored = loadSettings();
   const settings = {
-    binderFlow: (stateForSettings && stateForSettings.binderFlow) || loadSettings().binderFlow,
+    binderFlow: (stateForSettings && stateForSettings.binderFlow) || stored.binderFlow,
+    binderHeaders: stateForSettings && typeof stateForSettings.binderHeaders === 'boolean'
+      ? stateForSettings.binderHeaders
+      : stored.binderHeaders,
   };
   scheduleSave(buildBundle(activeCollectionId, settings, collections));
 }
@@ -367,7 +377,8 @@ async function pushBundle(stateForSettings) {
 // Used to gate the unload-stash flush against post-close IDB changes.
 async function currentBundleJson() {
   const collections = await getAllCollectionsFull();
-  const settings = { binderFlow: loadSettings().binderFlow };
+  const stored = loadSettings();
+  const settings = { binderFlow: stored.binderFlow, binderHeaders: stored.binderHeaders };
   return serializeBundle(activeCollectionId, settings, collections);
 }
 
@@ -460,7 +471,12 @@ async function setBinderLayout(state, layout) {
 
 function setBinderFlow(state, flow) {
   state.binderFlow = flow;
-  saveSettings({ binderFlow: state.binderFlow });
+  saveSettings({ binderFlow: state.binderFlow, binderHeaders: state.binderHeaders !== false });
+}
+
+function setBinderHeaders(state, show) {
+  state.binderHeaders = !!show;
+  saveSettings({ binderFlow: state.binderFlow || 'page', binderHeaders: state.binderHeaders });
 }
 
 async function setCardSelection(state, formId, cardData) {
@@ -584,7 +600,7 @@ export {
   loadSettings, saveSettings,
   getActiveCollectionId, setActiveCollectionId,
   toggleCaught, toggleCategory, toggleExcludedForm,
-  setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
+  setBinderLayout, setBinderFlow, setBinderHeaders, setCardSelection, clearCardSelection,
   setFreestyleSlot, clearFreestyleSlot,
   saveBooks, addBook, updateBook, removeBook,
   addSetToCollection, removeSetFromCollection,

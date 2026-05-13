@@ -12,7 +12,7 @@ import {
   loadSettings, saveSettings,
   getActiveCollectionId, setActiveCollectionId,
   toggleCaught, toggleCategory, toggleExcludedForm,
-  setBinderLayout, setBinderFlow, setCardSelection, clearCardSelection,
+  setBinderLayout, setBinderFlow, setBinderHeaders, setCardSelection, clearCardSelection,
   setFreestyleSlot, clearFreestyleSlot,
   saveBooks, addSetToCollection, removeSetFromCollection,
   exportState, importState, resetCaught,
@@ -338,6 +338,9 @@ collectionTitle.addEventListener('click', async (e) => {
         rebuildCollection();
         const binderFlowCheck = document.getElementById('binder-flow-check');
         binderFlowCheck.checked = state.binderFlow === 'row';
+        const binderHeadersCheck = document.getElementById('binder-headers-check');
+        binderHeadersCheck.checked = state.binderHeaders !== false;
+        applyBinderHeaders();
         if (state.type !== 'pokedex') switchView('binder');
       }
       closeCollectionDropdown();
@@ -2103,6 +2106,10 @@ viewBinderBtn.addEventListener('click', () => switchView('binder'));
 
 // ---- Binder controls ----
 const binderFlowCheck = document.getElementById('binder-flow-check');
+const binderHeadersCheck = document.getElementById('binder-headers-check');
+function applyBinderHeaders() {
+  binderViewEl.classList.toggle('hide-headers', state.binderHeaders === false);
+}
 binderLayoutSelect.addEventListener('change', () => {
   setBinderLayout(state, binderLayoutSelect.value);
   binderViewIndex = 0;
@@ -2111,6 +2118,10 @@ binderLayoutSelect.addEventListener('change', () => {
 binderFlowCheck.addEventListener('change', () => {
   setBinderFlow(state, binderFlowCheck.checked ? 'row' : 'page');
   renderBinder();
+});
+binderHeadersCheck.addEventListener('change', () => {
+  setBinderHeaders(state, binderHeadersCheck.checked);
+  applyBinderHeaders();
 });
 binderPrev.addEventListener('click', () => {
   if (binderViewIndex > 0) {
@@ -2328,8 +2339,11 @@ async function handleRemoteData(raw, { mode = 'reconcile', priorityIds } = {}) {
   // collection gets silently lost because the gist still had an older bundle.
   const needsBundlePush = mode === 'union' && hadLocalOnly;
 
-  if (bundle.settings && bundle.settings.binderFlow) {
-    saveSettings({ binderFlow: bundle.settings.binderFlow });
+  if (bundle.settings) {
+    const next = loadSettings();
+    if (bundle.settings.binderFlow) next.binderFlow = bundle.settings.binderFlow;
+    if (typeof bundle.settings.binderHeaders === 'boolean') next.binderHeaders = bundle.settings.binderHeaders;
+    saveSettings(next);
   }
 
   const localActiveId = getActiveCollectionId();
@@ -2356,6 +2370,8 @@ setRemoteChangeCallback(async (data) => {
     if (result.needsBundlePush) await pushBundle(state);
     updateTypeAwareControls();
     binderFlowCheck.checked = state.binderFlow === 'row';
+    binderHeadersCheck.checked = state.binderHeaders !== false;
+    applyBinderHeaders();
     rebuildCollection();
   }
 });
@@ -2449,6 +2465,8 @@ async function maybeResetTcgCache() {
 function renderAll() {
   binderLayoutSelect.value = getLayout();
   binderFlowCheck.checked = state.binderFlow === 'row';
+  binderHeadersCheck.checked = state.binderHeaders !== false;
+  applyBinderHeaders();
   updateSyncButton();
   updateTypeAwareControls();
   rebuildCollection();

@@ -1280,6 +1280,10 @@ main {
 }
 
 /* ---- Slot States ---- */
+.binder-view.hide-headers .slot-nums,
+.binder-view.hide-headers .slot-card-label,
+.binder-view.hide-headers .slot-card-name { display: none; }
+
 .binder-slot.want { border-color: var(--border); }
 .binder-slot.want .slot-card-img { filter: grayscale(1); opacity: 0.4; }
 .binder-slot.want .slot-nums { opacity: 0.5; }
