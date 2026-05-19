@@ -1297,7 +1297,7 @@ function searchMatches(query) {
   const q = query.toLowerCase();
   const results = [];
   for (const p of collection) {
-    if (results.length >= 10) break;
+    if (results.length >= 30) break;
     if (p.isEmpty) continue;
     const nameMatch = p.name && p.name.toLowerCase().includes(q);
     const formMatch = p.formName && p.formName.toLowerCase().includes(q);
