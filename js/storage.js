@@ -30,6 +30,7 @@ function defaultCollectionRecord() {
     name: 'Living Dex',
     type: 'pokedex',
     layout: '3x3',
+    binderFlow: 'page',
     caught: [],
     books: [...DEFAULT_BOOKS],
     // Pokedex-specific
@@ -47,6 +48,7 @@ function recordToState(record) {
     collectionName: record.name,
     type,
     layout: record.layout || '3x3',
+    binderFlow: record.binderFlow || 'page',
     caught: new Set(record.caught || []),
     books: Array.isArray(record.books) && record.books.length > 0
       ? record.books
@@ -75,6 +77,7 @@ function stateToRecord(state) {
     name: state.collectionName || 'Collection',
     type,
     layout: state.layout || '3x3',
+    binderFlow: state.binderFlow || 'page',
     caught: [...state.caught],
     books: state.books,
   };
@@ -102,12 +105,11 @@ function loadSettings() {
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
-        binderFlow: parsed.binderFlow || 'page',
         binderHeaders: parsed.binderHeaders !== false,
       };
     }
   } catch { /* ignore */ }
-  return { binderFlow: 'page', binderHeaders: true };
+  return { binderHeaders: true };
 }
 
 function saveSettings(settings) {
@@ -124,7 +126,6 @@ async function loadState() {
   }
   const state = recordToState(record);
   const settings = loadSettings();
-  state.binderFlow = settings.binderFlow;
   state.binderHeaders = settings.binderHeaders;
   return state;
 }
@@ -142,7 +143,6 @@ async function saveState(state) {
 
 function serializeState(state) {
   const record = stateToRecord(state);
-  record.binderFlow = state.binderFlow;
   record.binderHeaders = state.binderHeaders;
   return record;
 }
@@ -150,7 +150,6 @@ function serializeState(state) {
 function loadStateFromData(data) {
   if (!data || !Array.isArray(data.caught)) return null;
   const state = recordToState(data);
-  state.binderFlow = data.binderFlow || 'page';
   state.binderHeaders = data.binderHeaders !== false;
   return state;
 }
@@ -173,6 +172,7 @@ function compactCollection(record) {
   const out = { id: record.id, name: record.name, type, cg: [...(record.caught || [])] };
 
   if (record.layout && record.layout !== '3x3') out.l = record.layout;
+  if (record.binderFlow && record.binderFlow !== 'page') out.bf = record.binderFlow;
 
   if (Array.isArray(record.books) && record.books.length > 0 && JSON.stringify(record.books) !== DEFAULT_BOOKS_JSON) {
     out.b = record.books;
@@ -215,6 +215,7 @@ function expandCollection(compact) {
     name: compact.name,
     type,
     layout: compact.l || '3x3',
+    binderFlow: compact.bf || 'page',
     caught: Array.isArray(compact.cg) ? [...compact.cg] : [],
     books: Array.isArray(compact.b) && compact.b.length > 0 ? compact.b : [...DEFAULT_BOOKS],
   };
@@ -262,7 +263,7 @@ function parseBundle(raw) {
     return {
       v: BUNDLE_VERSION,
       activeId: raw.activeId || null,
-      settings: raw.settings || { binderFlow: 'page', binderHeaders: true },
+      settings: raw.settings || { binderHeaders: true },
       collections: raw.collections,
     };
   }
@@ -365,7 +366,6 @@ async function pushBundle(stateForSettings) {
   const collections = await getAllCollectionsFull();
   const stored = loadSettings();
   const settings = {
-    binderFlow: (stateForSettings && stateForSettings.binderFlow) || stored.binderFlow,
     binderHeaders: stateForSettings && typeof stateForSettings.binderHeaders === 'boolean'
       ? stateForSettings.binderHeaders
       : stored.binderHeaders,
@@ -378,7 +378,7 @@ async function pushBundle(stateForSettings) {
 async function currentBundleJson() {
   const collections = await getAllCollectionsFull();
   const stored = loadSettings();
-  const settings = { binderFlow: stored.binderFlow, binderHeaders: stored.binderHeaders };
+  const settings = { binderHeaders: stored.binderHeaders };
   return serializeBundle(activeCollectionId, settings, collections);
 }
 
@@ -469,14 +469,14 @@ async function setBinderLayout(state, layout) {
   await saveState(state);
 }
 
-function setBinderFlow(state, flow) {
+async function setBinderFlow(state, flow) {
   state.binderFlow = flow;
-  saveSettings({ binderFlow: state.binderFlow, binderHeaders: state.binderHeaders !== false });
+  await saveState(state);
 }
 
 function setBinderHeaders(state, show) {
   state.binderHeaders = !!show;
-  saveSettings({ binderFlow: state.binderFlow || 'page', binderHeaders: state.binderHeaders });
+  saveSettings({ binderHeaders: state.binderHeaders });
 }
 
 async function setCardSelection(state, formId, cardData) {

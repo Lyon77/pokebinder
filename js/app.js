@@ -2341,7 +2341,6 @@ async function handleRemoteData(raw, { mode = 'reconcile', priorityIds } = {}) {
 
   if (bundle.settings) {
     const next = loadSettings();
-    if (bundle.settings.binderFlow) next.binderFlow = bundle.settings.binderFlow;
     if (typeof bundle.settings.binderHeaders === 'boolean') next.binderHeaders = bundle.settings.binderHeaders;
     saveSettings(next);
   }
