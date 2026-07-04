@@ -71,7 +71,7 @@ const cases = [
   },
   {
     name: 'modern Rare Secret stays holofoil only',
-    card: makeCard('sv1-251', 'sv1', '2023/03/31', 'Rare Secret'),
+    card: makeCard('swsh12pt5-160', 'swsh12pt5', '2023/01/20', 'Rare Secret'),
     expected: ['holofoil'],
   },
 ];

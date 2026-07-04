@@ -7,7 +7,7 @@ Collections and card-picker state live in your browser's IndexedDB. Optional cro
 ## Collection Types
 
 - **Pokedex** — one slot per Pokemon across selected generations. Covers 1288 entries: 1025 base forms plus 263 alternates (Alolan, Galarian, Hisuian, Paldean, Mega, Gigantamax, and more). Optionally assign a specific TCG card to any Pokemon slot.
-- **Master Set** — one slot per card variant across one or more TCG sets. Variants (normal, reverse-holo, holo, 1st-edition, etc.) are derived from the Pokemon TCG API's `tcgplayer.prices` data.
+- **Master Set** — one slot per card variant across one or more TCG sets. Variants (normal, reverse-holo, holo, 1st-edition, etc.) are derived from deterministic set release-date and card-rarity rules, with per-card overrides for known exceptions.
 - **Freestyle** — user-defined number of pages, fill each slot with any TCG card from any set. Slots can be marked as "want" (placeholder) or "owned".
 
 Each collection has its own layout (3x3, 3x4, 4x3, 4x4), its own caught/want state, and its own books (sub-divisions).

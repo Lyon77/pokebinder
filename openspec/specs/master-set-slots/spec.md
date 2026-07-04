@@ -18,9 +18,21 @@ When a set is added to a Master Set collection, the system SHALL fetch all cards
 - **WHEN** a card has rarity `"Common"` in a set released after 2003-06-01
 - **THEN** two slots are created: `{cardId}:normal` and `{cardId}:reverseHolofoil`
 
-#### Scenario: e-Card era Rare Holo
-- **WHEN** a card has rarity `"Rare Holo"` in Expedition / Aquapolis / Skyridge
+#### Scenario: Aquapolis Rare Holo
+- **WHEN** a card has rarity `"Rare Holo"` and set ID `ecard2`
 - **THEN** one slot is created: `{cardId}:holofoil`
+
+#### Scenario: Aquapolis Crystal secret rare
+- **WHEN** a card has rarity `"Rare Secret"` and set ID `ecard2`
+- **THEN** one slot is created: `{cardId}:holofoil`
+
+#### Scenario: Skyridge Rare Holo
+- **WHEN** a card has rarity `"Rare Holo"` and set ID `ecard3`
+- **THEN** one slot is created: `{cardId}:holofoil`
+
+#### Scenario: Skyridge Crystal secret rare
+- **WHEN** a card has rarity `"Rare Secret"` and set ID `ecard3`
+- **THEN** two slots are created: `{cardId}:holofoil` and `{cardId}:reverseHolofoil`
 
 #### Scenario: Original-era Common in a 1st Edition set
 - **WHEN** a card has rarity `"Common"` and its set ID is in the 1st-Edition-eligible list (e.g. `base1`, `gym1`, `neo1`)
