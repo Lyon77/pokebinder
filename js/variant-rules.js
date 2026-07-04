@@ -26,8 +26,8 @@ const FIRST_ED_SETS = new Set([
 
 // Era cutoffs by ISO release date.
 // - preReverse: pre-Legendary Collection (no reverse foils)
-// - earlyReverse: LC + e-Card era (reverse foils on Common/Uncommon/Rare AND
-//   Rare Holo; no reverse foils on special rarities like Crystal/Rare Secret)
+// - earlyReverse: LC + e-Card era (reverse foils on Common/Uncommon/Rare;
+//   Rare Holo and Rare Secret have set-specific reverse-foil exceptions)
 // - modern: EX onwards (reverse foils on Common/Uncommon/Rare AND Rare Holo)
 const LC_RELEASE = '2002-05-24';
 const EX_RELEASE = '2003-06-01';
@@ -76,6 +76,7 @@ function rarityCategory(rarity) {
     case 'Uncommon':  return 'uncommon';
     case 'Rare':      return 'rare';
     case 'Rare Holo': return 'rareHolo';
+    case 'Rare Secret': return 'rareSecret';
     default:          return 'special'; // EX, GX, V, Ultra, Secret, Promo, etc.
   }
 }
@@ -83,7 +84,7 @@ function rarityCategory(rarity) {
 function variantsForEra(era, category, setId) {
   if (era === 'preReverse') {
     const has1stEd = FIRST_ED_SETS.has(setId);
-    if (category === 'rareHolo' || category === 'special') {
+    if (category === 'rareHolo' || category === 'rareSecret' || category === 'special') {
       return has1stEd ? ['1stEditionHolofoil', 'holofoil'] : ['holofoil'];
     }
     // common, uncommon, rare
@@ -91,13 +92,20 @@ function variantsForEra(era, category, setId) {
   }
 
   if (era === 'earlyReverse') {
-    if (category === 'special') return ['holofoil'];
+    if (setId === 'ecard2' && (category === 'rareHolo' || category === 'rareSecret')) {
+      return ['holofoil'];
+    }
+    if (setId === 'ecard3' && category === 'rareHolo') return ['holofoil'];
+    if (setId === 'ecard3' && category === 'rareSecret') {
+      return ['holofoil', 'reverseHolofoil'];
+    }
+    if (category === 'rareSecret' || category === 'special') return ['holofoil'];
     if (category === 'rareHolo') return ['holofoil', 'reverseHolofoil'];
     return ['normal', 'reverseHolofoil'];
   }
 
   // modern
-  if (category === 'special') return ['holofoil'];
+  if (category === 'rareSecret' || category === 'special') return ['holofoil'];
   if (category === 'rareHolo') return ['holofoil', 'reverseHolofoil'];
   return ['normal', 'reverseHolofoil'];
 }
