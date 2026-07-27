@@ -1,5 +1,10 @@
 import { getCachedCards, cacheCards, getAllCachedCards } from './db.js';
 import { variantsForCard, ensureOverridesLoaded } from './variant-rules.js';
+import {
+  buildMasterSlotId,
+  numberVariantsForCard,
+  setDisplayNumberVariant,
+} from './master-slots.js';
 
 const VARIANT_ORDER = ['normal', 'holofoil', '1stEditionNormal', '1stEditionHolofoil', 'reverseHolofoil', 'default'];
 
@@ -114,24 +119,26 @@ function expandVariants(rawCards) {
   for (const raw of rawCards) {
     const card = parseCard(raw);
     const variants = variantsForCard(raw);
+    const numberVariants = numberVariantsForCard(raw);
+    const cardNumbers = numberVariants.length > 0 ? numberVariants : [null];
 
-    if (!variants || variants.length === 0) {
-      slots.push({
-        ...card,
-        slotId: `${card.cardId}:default`,
-        variant: 'default',
-        rawNumber: raw.number || '',
-      });
-    } else {
+    if (variants && variants.length > 0) {
       variants.sort((a, b) => {
         const ai = VARIANT_ORDER.indexOf(a);
         const bi = VARIANT_ORDER.indexOf(b);
         return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
       });
-      for (const variant of variants) {
+    }
+
+    for (const numberVariant of cardNumbers) {
+      for (const variant of variants && variants.length > 0 ? variants : ['default']) {
         slots.push({
           ...card,
-          slotId: `${card.cardId}:${variant}`,
+          ...(numberVariant ? {
+            numberVariant,
+            number: setDisplayNumberVariant(card.number, numberVariant),
+          } : {}),
+          slotId: buildMasterSlotId(card.cardId, variant, numberVariant),
           variant,
           rawNumber: raw.number || '',
         });
@@ -158,6 +165,11 @@ function expandVariants(rawCards) {
       return prefA.localeCompare(prefB);
     }
     if (numA !== numB) return numA - numB;
+    if (a.numberVariant !== b.numberVariant) {
+      if (!a.numberVariant) return -1;
+      if (!b.numberVariant) return 1;
+      return a.numberVariant.localeCompare(b.numberVariant);
+    }
     const vi = (v) => { const i = VARIANT_ORDER.indexOf(v); return i === -1 ? 99 : i; };
     return vi(a.variant) - vi(b.variant);
   });

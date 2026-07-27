@@ -34,6 +34,16 @@ When a set is added to a Master Set collection, the system SHALL fetch all cards
 - **WHEN** a card has rarity `"Rare Secret"` and set ID `ecard3`
 - **THEN** two slots are created: `{cardId}:holofoil` and `{cardId}:reverseHolofoil`
 
+#### Scenario: Aquapolis dual collector-number cards
+- **WHEN** the API card ID is `ecard2-50`, `ecard2-74`, `ecard2-95`, or `ecard2-103`
+- **THEN** its finish variants are expanded once for collector-number suffix `a` and once for suffix `b`, replacing the unsuffixed identity
+- **AND** the display numbers are respectively `50a`/`50b`, `74a`/`74b`, `95a`/`95b`, or `103a`/`103b`
+- **AND** the upstream `cardId` remains unchanged for metadata and image hydration
+
+#### Scenario: Other e-Reader sets have no dual collector-number cards
+- **WHEN** a card belongs to Expedition (`ecard1`) or Skyridge (`ecard3`)
+- **THEN** no `a`/`b` collector-number identity is synthesized
+
 #### Scenario: Original-era Common in a 1st Edition set
 - **WHEN** a card has rarity `"Common"` and its set ID is in the 1st-Edition-eligible list (e.g. `base1`, `gym1`, `neo1`)
 - **THEN** two slots are created: `{cardId}:1stEditionNormal` and `{cardId}:normal`
@@ -80,11 +90,15 @@ The system SHALL map variant keys to human-readable labels: `normal` → "Normal
 - **THEN** no variant badge is displayed
 
 ### Requirement: Master Set slot ordering
-Slots within a Master Set book SHALL be ordered by card number (numeric sort), then by variant (normal before reverseHolofoil before holofoil).
+Slots within a Master Set book SHALL be ordered by card number (numeric sort), then by optional collector-number suffix (`a` before `b`), then by variant (normal before reverseHolofoil before holofoil). Prefixed collector-number groups such as `H` and `TG` SHALL continue to sort by prefix and numeric value.
 
 #### Scenario: Slot order
 - **WHEN** a Master Set book contains Crown Zenith
 - **THEN** slots appear as: #1 Normal, #1 Rev. Holo, #2 Normal, #2 Rev. Holo, ..., #160 Holo
+
+#### Scenario: Aquapolis dual-number slot order
+- **WHEN** an Aquapolis dual-number card has normal and reverse-holo finishes
+- **THEN** its slots appear as: `a` Normal, `a` Rev. Holo, `b` Normal, `b` Rev. Holo
 
 ### Requirement: Master Set click behavior
 Clicking a Master Set binder slot SHALL toggle its owned state (add/remove from caught set). No card picker is shown — the card is pre-assigned.

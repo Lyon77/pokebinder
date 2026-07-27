@@ -1,3 +1,5 @@
+import { selectPendingBundleForFlush } from './bundle-compat.js';
+
 const SYNC_PAT_KEY = 'pokebinder-sync-pat';
 const SYNC_GIST_KEY = 'pokebinder-sync-gist-id';
 const SYNC_PENDING_KEY = 'pokebinder-sync-pending-bundle';
@@ -258,17 +260,20 @@ function readStashedPending() {
 // Push any stashed pending bundle to the gist. If `currentBundleJson` is
 // supplied and the stash no longer matches the local state (e.g., user
 // edited collections in another session), the stash is dropped — current
-// state wins. Returns true if the stash was successfully pushed.
+// state wins. A semantically identical v2 stash selects the current v3 JSON,
+// upgrading the recovered write without discarding it. Returns true if the
+// selected bundle was successfully pushed.
 async function flushStashedPending(currentBundleJson) {
   if (!isSyncConfigured()) return false;
   const stash = readStashedPending();
   if (stash === null) return false;
-  if (currentBundleJson && stash !== currentBundleJson) {
+  const bundleToFlush = selectPendingBundleForFlush(stash, currentBundleJson);
+  if (bundleToFlush === null) {
     localStorage.removeItem(SYNC_PENDING_KEY);
     return false;
   }
-  pendingJson = stash;
-  await saveToGist(stash);
+  pendingJson = bundleToFlush;
+  await saveToGist(bundleToFlush);
   if (pendingJson === null) {
     localStorage.removeItem(SYNC_PENDING_KEY);
     return true;

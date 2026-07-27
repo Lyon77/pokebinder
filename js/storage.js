@@ -1,6 +1,11 @@
 import { getCollection, saveCollection, deleteCollection, getAllCollectionsFull } from './db.js';
 import { scheduleSave, isSyncConfigured, hasPendingLocalChange } from './sync.js';
 import { hydrateCards } from './tcg-api.js';
+import {
+  compactMasterSlot,
+  expandCompactMasterSlot,
+  hydrateMasterSlot,
+} from './master-slots.js';
 
 const SETTINGS_KEY = 'pokebinder-settings';
 const ACTIVE_COLLECTION_KEY = 'pokebinder-active-collection';
@@ -154,9 +159,10 @@ function loadStateFromData(data) {
   return state;
 }
 
-// --- Bundle (v2) serialization ---
+// --- Bundle (v3) serialization; v2 remains readable for migration ---
 
-const BUNDLE_VERSION = 2;
+const BUNDLE_VERSION = 3;
+const READABLE_BUNDLE_VERSIONS = new Set([2, BUNDLE_VERSION]);
 const ALL_GENS_JSON = JSON.stringify([...ALL_GENERATIONS]);
 const DEFAULT_BOOKS_JSON = JSON.stringify(DEFAULT_BOOKS);
 
@@ -196,7 +202,7 @@ function compactCollection(record) {
   } else if (type === 'master') {
     if (Array.isArray(record.sets) && record.sets.length > 0) out.s = [...record.sets];
     if (Array.isArray(record.slotList) && record.slotList.length > 0) {
-      out.sl = record.slotList.map(slot => slot ? { c: slot.cardId, v: slot.variant } : null);
+      out.sl = record.slotList.map(slot => slot ? compactMasterSlot(slot) : null);
     }
   } else if (type === 'freestyle') {
     if (typeof record.pageCount === 'number') out.pc = record.pageCount;
@@ -233,7 +239,7 @@ function expandCollection(compact) {
   } else if (type === 'master') {
     record.sets = Array.isArray(compact.s) ? [...compact.s] : [];
     record.slotList = Array.isArray(compact.sl)
-      ? compact.sl.map(s => s ? { cardId: s.c, variant: s.v, slotId: `${s.c}:${s.v}` } : null)
+      ? compact.sl.map(s => s ? expandCompactMasterSlot(s) : null)
       : [];
   } else if (type === 'freestyle') {
     if (typeof compact.pc === 'number') record.pageCount = compact.pc;
@@ -259,9 +265,14 @@ function serializeBundle(activeId, settings, collections) {
 }
 
 function parseBundle(raw) {
-  if (raw && typeof raw === 'object' && raw.v === BUNDLE_VERSION && Array.isArray(raw.collections)) {
+  if (
+    raw
+    && typeof raw === 'object'
+    && READABLE_BUNDLE_VERSIONS.has(raw.v)
+    && Array.isArray(raw.collections)
+  ) {
     return {
-      v: BUNDLE_VERSION,
+      v: raw.v,
       activeId: raw.activeId || null,
       settings: raw.settings || { binderHeaders: true },
       collections: raw.collections,
@@ -303,7 +314,7 @@ function applyHydrationToRecord(record, hydrated) {
       const slot = record.slotList[i];
       if (slot && slot.cardId && !slot.imageSmall) {
         const full = hydrated.get(slot.cardId);
-        if (full) record.slotList[i] = { ...full, variant: slot.variant, slotId: `${slot.cardId}:${slot.variant}` };
+        if (full) record.slotList[i] = hydrateMasterSlot(slot, full);
       }
     }
   } else if (type === 'freestyle' && Array.isArray(record.slots)) {
@@ -606,7 +617,8 @@ export {
   addSetToCollection, removeSetFromCollection,
   exportState, importState, resetCaught,
   defaultCollectionRecord,
-  // Bundle sync (v2)
+  // Bundle sync (v3; reads legacy v2)
+  buildBundle,
   parseBundle, rehydrateBundle, reconcileBundleToIDB,
   pushBundle, currentBundleJson, saveCollectionRecord, deleteCollectionRecord,
   setSaveErrorCallback,

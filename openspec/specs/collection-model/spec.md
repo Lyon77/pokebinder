@@ -52,12 +52,24 @@ The system SHALL sync the full set of collections (not only the active one) to t
 - **WHEN** the user toggles a caught state on the active collection
 - **THEN** the push payload is a full bundle of all collections, not a single-collection serialization
 
-### Requirement: Sync payload uses compact bundle schema v2
-The sync payload SHALL be a single JSON object with schema version `v: 2`, a top-level `activeId` hint, a `settings` object, and a `collections` array. The JSON SHALL NOT be pretty-printed. Each collection entry SHALL use abbreviated keys (`cg` for caught, `b` for books, `cs` for cardSelections, `dc` for disabledCategories, `ef` for excludedForms, `sl` for slotList or slots, `pc` for pageCount, `s` for sets, `l` for layout, `g` for generations). Default values SHALL be omitted (`layout: "3x3"`, `generations: [1..9]`, empty arrays, default books).
+### Requirement: Sync payload uses compact bundle schema v3
+The sync payload SHALL be a single JSON object with schema version `v: 3`, a top-level `activeId` hint, a `settings` object, and a `collections` array. The JSON SHALL NOT be pretty-printed. Each collection entry SHALL use abbreviated keys (`cg` for caught, `b` for books, `cs` for cardSelections, `dc` for disabledCategories, `ef` for excludedForms, `sl` for slotList or slots, `pc` for pageCount, `s` for sets, `l` for layout, `g` for generations). Default values SHALL be omitted (`layout: "3x3"`, `generations: [1..9]`, empty arrays, default books). Readers SHALL accept legacy schema `v: 2` bundles and reject unknown schema versions.
 
 #### Scenario: Payload shape
 - **WHEN** the sync system serializes state for push
-- **THEN** the serialized JSON has top-level keys `v`, `activeId`, `settings`, `collections`, with `v: 2`
+- **THEN** the serialized JSON has top-level keys `v`, `activeId`, `settings`, `collections`, with `v: 3`
+
+#### Scenario: Legacy v2 bundle
+- **WHEN** the sync system reads a compact bundle with `v: 2`
+- **THEN** the bundle is accepted and rehydrated using the legacy entries
+
+#### Scenario: Recover equivalent pending v2 write
+- **WHEN** crash recovery finds a valid pending `v: 2` bundle whose payload is identical to the current local `v: 3` bundle apart from the top-level version
+- **THEN** the current `v: 3` serialization is pushed so the pending local edit is preserved and upgraded
+
+#### Scenario: Unknown bundle version
+- **WHEN** the sync system reads a compact bundle whose version is neither `2` nor `3`
+- **THEN** the bundle is rejected without interpreting its collections
 
 #### Scenario: Compact JSON
 - **WHEN** the sync payload is produced
@@ -68,7 +80,7 @@ The sync payload SHALL be a single JSON object with schema version `v: 2`, a top
 - **THEN** neither `l` nor `g` appears in the collection's compact form
 
 ### Requirement: Sync payload strips derivable card fields
-Each card reference in the sync payload SHALL contain only the minimum data needed to rehydrate the full card from the TCG cache or API. Pokedex `cardSelections` SHALL map `formId → cardId` (string). Freestyle `slots` SHALL be an array whose entries are `null` or a `cardId` string. Master `slotList` SHALL be an array of `{ c: cardId, v: variant }` entries.
+Each card reference in the sync payload SHALL contain only the minimum data needed to rehydrate the full card from the TCG cache or API. Pokedex `cardSelections` SHALL map `formId → cardId` (string). Freestyle `slots` SHALL be an array whose entries are `null` or a `cardId` string. Master `slotList` SHALL be an array of `{ c: cardId, v: variant }` entries, with optional `n: "a" | "b"` only for dual collector-number identities.
 
 #### Scenario: Pokedex card selection stripped
 - **WHEN** a Pokedex has `cardSelections: { pikachu: { cardId: "base1-58", name: "Pikachu", setName: "Base", imageSmall: "..." } }`
@@ -81,6 +93,11 @@ Each card reference in the sync payload SHALL contain only the minimum data need
 #### Scenario: Master slot list stripped
 - **WHEN** a Master Set `slotList` contains a Charizard reverse-holo slot with full metadata
 - **THEN** the serialized form stores `{ c: "swsh12pt5-1", v: "reverseHolofoil" }` at that position
+
+#### Scenario: Aquapolis dual-number master slot stripped
+- **WHEN** a Master Set `slotList` contains the `b` reverse-holo identity of Aquapolis Golduck
+- **THEN** the serialized form stores `{ c: "ecard2-50", v: "reverseHolofoil", n: "b" }` at that position
+- **AND** compact entries without `n` continue to rehydrate to their existing unsuffixed slot IDs
 
 ### Requirement: Pull rehydrates stripped card fields
 When a bundle is pulled from the Gist, the system SHALL rehydrate each card reference by looking up its full metadata. Lookups SHALL check the local TCG cache first; cache misses SHALL fall back to the TCG API. Rehydrated cards SHALL be written to IndexedDB in their full-metadata form. Cards that cannot be rehydrated (offline + cache miss) SHALL remain as stubs and be rendered as spinner placeholders in the UI until rehydration succeeds.

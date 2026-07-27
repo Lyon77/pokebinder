@@ -9,7 +9,8 @@ The system SHALL support three collection types: `pokedex`, `master`, and `frees
 
 #### Scenario: Master Set type
 - **WHEN** a collection has type `master`
-- **THEN** its slots are derived from a cached `slotList` of TCG card variants, and each slot is identified by `{cardId}:{variant}`
+- **THEN** its slots are derived from a cached `slotList` of TCG card variants, and each ordinary slot is identified by `{cardId}:{variant}`
+- **AND** a slot with collector-number suffix `a` or `b` is identified by `{cardId}:{numberVariant}:{variant}`
 
 #### Scenario: Freestyle type
 - **WHEN** a collection has type `freestyle`
@@ -23,7 +24,7 @@ A Pokedex collection SHALL store a `generations` array specifying which generati
 - **THEN** only Pokemon from Gen I and Gen II appear as slots in the binder
 
 ### Requirement: Master Set collection configuration
-A Master Set collection SHALL store a `sets` array of TCG set IDs and a `slotList` array of expanded card variant records. Each slot record SHALL contain: `slotId`, `cardId`, `variant`, `name`, `number`, `setId`, `setName`, `rarity`, and `imageSmall`.
+A Master Set collection SHALL store a `sets` array of TCG set IDs and a `slotList` array of expanded card variant records. Each slot record SHALL contain: `slotId`, `cardId`, `variant`, `name`, `number`, `setId`, `setName`, `rarity`, and `imageSmall`. A slot MAY also contain `numberVariant`, restricted to `"a"` or `"b"`.
 
 #### Scenario: Multiple sets in one collection
 - **WHEN** a Master Set collection has `sets: ["swsh12pt5", "sv3pt5"]`
