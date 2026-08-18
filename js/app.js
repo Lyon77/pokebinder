@@ -1,5 +1,5 @@
 import {
-  loadPokemonData, getFormCategories, getAlternateFormsByCategory,
+  loadPokemonData, getAllPokemon, getFormCategories, getAlternateFormsByCategory,
   getFormSubCategories, getOtherFormsWithoutSubCategory,
   FORM_CATEGORY_LABELS, FORM_SUBCATEGORY_ICONS,
 } from './data.js';
@@ -28,7 +28,14 @@ import {
   loadFromGist, cancelPendingSave, startPolling, stopPolling,
   flushStashedPending,
 } from './sync.js';
-import { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, hydrateCards, ensureOverridesLoaded, getVariantLabel } from './tcg-api.js';
+import { fetchCardsForPokemon, searchCardsByScanHints, fetchSets, fetchSetCards, expandVariants, hydrateCards, ensureOverridesLoaded, getVariantLabel } from './tcg-api.js';
+import {
+  hasClearScanLeader,
+  rankCardCandidates,
+  recognizeCardImage,
+  visualResultToScanHints,
+} from './card-scanner.js';
+import { createCollectorVisionScannerApplet } from '../vendor/collectorvision/lib/collectorvision-scanner-applet.mjs';
 import { getAllCollections, getAllCollectionsFull, clearAllTcgCache } from './db.js';
 
 // ---- View State ----
@@ -179,6 +186,10 @@ function updateStats() {
 }
 
 function updateTypeAwareControls() {
+  if (!cardPickerModal.hidden) {
+    closeCardPicker();
+    pickerPreviousFocus = null;
+  }
   const isPokedex = state.type === 'pokedex';
   const isFreestyle = state.type === 'freestyle';
 
@@ -1473,8 +1484,19 @@ const cardPickerRefresh = document.getElementById('card-picker-refresh');
 const cardPickerSave = document.getElementById('card-picker-save');
 const cardPickerClear = document.getElementById('card-picker-clear');
 const cardPickerBack = document.getElementById('card-picker-back');
+const cardPickerSearchBar = cardPickerFilter.closest('.card-search-bar');
+const cardPickerFooter = cardPickerSave.closest('.card-picker-footer');
+const cardPickerCamera = document.getElementById('card-picker-camera');
 const pickerIntentEl = document.getElementById('picker-intent');
 const pickerIntentInputs = pickerIntentEl.querySelectorAll('input[name="picker-intent"]');
+const cardScannerEl = document.getElementById('card-scanner');
+const cardScannerVisual = document.getElementById('card-scanner-visual');
+const cardScannerCanvas = document.getElementById('card-scanner-canvas');
+const cardScannerStatus = document.getElementById('card-scanner-status');
+const cardScannerCapture = document.getElementById('card-scanner-capture');
+const cardScannerFile = document.getElementById('card-scanner-file');
+const cardScannerRetry = document.getElementById('card-scanner-retry');
+const cardScannerCancel = document.getElementById('card-scanner-cancel');
 
 let pickerFormId = null;
 let pickerCards = [];
@@ -1483,10 +1505,394 @@ let pickerFilterTimer;
 let pickerPreviousFocus = null;
 let pickerCurrentName = null;
 let pickerOwnedIntent = false;
+let scannerStream = null;
+let scannerSessionId = 0;
+let scannerReturnState = null;
+let visualScanner = null;
+let visualScannerPromise = null;
+let scannerRecognitionPending = false;
 
-let pickerMode = 'cards'; // 'pokemon-search' or 'cards'
+let pickerMode = 'cards'; // 'pokemon-search', 'cards', 'scanner', or 'scan-results'
+
+function stopScannerStream() {
+  visualScanner?.stop();
+  if (scannerStream) {
+    for (const track of scannerStream.getTracks()) track.stop();
+  }
+  scannerStream = null;
+}
+
+function setScannerStatus(message, { error = false } = {}) {
+  cardScannerStatus.textContent = message;
+  cardScannerStatus.classList.toggle('error', error);
+}
+
+function showScannerError(message) {
+  stopScannerStream();
+  setScannerStatus(message, { error: true });
+  cardScannerCapture.disabled = true;
+  cardScannerRetry.hidden = false;
+  cardScannerFile.disabled = false;
+}
+
+function scannerErrorMessage(error) {
+  if (!window.isSecureContext) return 'Live camera access requires HTTPS or localhost. Choose a photo or search manually.';
+  if (error?.name === 'NotAllowedError') return 'Camera permission was denied. Allow it and retry, or choose a photo.';
+  if (error?.name === 'NotFoundError') return 'No camera was found. Choose a photo or search manually.';
+  if (error?.name === 'NotReadableError') return 'The camera is busy or unavailable. Close other camera apps and retry.';
+  if (/fetch|catalog|model|onnx|visual/i.test(error?.message || '')) {
+    return 'The visual card reader could not load. Check the connection, retry, or choose a photo for OCR fallback.';
+  }
+  return 'The camera could not be started. Choose a photo or search manually.';
+}
+
+function visualProgressMessage(progress) {
+  const labels = {
+    detector: 'Loading card detector',
+    embedder: 'Loading visual matcher',
+    catalog: 'Loading Pokemon card catalog',
+  };
+  const label = labels[progress?.stage];
+  if (!label) return null;
+  const ratio = Number(progress?.ratio);
+  return Number.isFinite(ratio) && ratio > 0
+    ? `${label} ${Math.round(ratio * 100)}%`
+    : `${label}...`;
+}
+
+async function getVisualScanner() {
+  if (visualScanner) return visualScanner;
+  if (!visualScannerPromise) {
+    visualScannerPromise = createCollectorVisionScannerApplet({
+      target: cardScannerVisual,
+      manifestUrl: new URL('../vendor/collectorvision/manifest.json', import.meta.url).href,
+      assetBasePath: 'https://hanclinto.github.io/CollectorVision/assets',
+      workerUrl: new URL('../vendor/collectorvision/scanner.worker.mjs', import.meta.url).href,
+      catalogMode: 'v2',
+      catalogGame: 'pokemon',
+      autoStart: false,
+      enableWebGpu: false,
+      matchThreshold: 0.65,
+      rotationFastPathThreshold: 0.75,
+      consecutiveMatches: 2,
+      scanIntervalMs: 300,
+      cooldownMs: 1500,
+      groupBySecondaryId: false,
+      showFpsOverlay: false,
+      overlay: true,
+    }).then(scanner => {
+      visualScanner = scanner;
+      if (window.__pokebinderScannerTest) window.__pokebinderScannerTest.visualScanner = scanner;
+      return scanner;
+    }).catch(error => {
+      visualScannerPromise = null;
+      throw error;
+    });
+  }
+  return visualScannerPromise;
+}
+
+async function processVisualScannerResult(result, sessionId) {
+  if (scannerRecognitionPending || sessionId !== scannerSessionId || pickerMode !== 'scanner') return;
+  if (!result?.cardPresent || !result?.cornersValid || !Number.isFinite(result.score) || result.score < 0.65) return;
+  scannerRecognitionPending = true;
+  stopScannerStream();
+  const hints = visualResultToScanHints(result);
+  setScannerStatus(`Matched ${hints.names[0] || 'card'} visually. Looking up the printing...`);
+  try {
+    const matched = await showScannerMatches(hints, sessionId, { source: 'visual' });
+    if (!matched && sessionId === scannerSessionId) {
+      showScannerError('The artwork matched, but the printing was not found. Retry or search manually.');
+    }
+  } catch (error) {
+    if (sessionId === scannerSessionId) {
+      showScannerError(`${error.message}. Retry or search manually.`);
+    }
+  } finally {
+    scannerRecognitionPending = false;
+  }
+}
+
+async function startScannerCamera(sessionId) {
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    showScannerError(scannerErrorMessage(new Error('Camera unavailable')));
+    return;
+  }
+
+  setScannerStatus('Loading visual card reader...');
+  cardScannerCapture.disabled = true;
+  cardScannerRetry.hidden = true;
+  try {
+    const scanner = await getVisualScanner();
+    scanner.updateConfig({
+      onProgress(progress) {
+        const message = visualProgressMessage(progress);
+        if (message && sessionId === scannerSessionId && !cardScannerStatus.classList.contains('error')) {
+          setScannerStatus(message);
+        }
+      },
+      onReady() {
+        if (sessionId === scannerSessionId && scanner.started) {
+          setScannerStatus('Point one card at the camera. Hold it steady while several frames are checked.');
+        }
+      },
+      onResult(result) {
+        if (sessionId !== scannerSessionId || pickerMode !== 'scanner' || scannerRecognitionPending) return;
+        window.__pokebinderScannerTest?.onVisualResult?.({
+          cardPresent: result.cardPresent,
+          cornersValid: result.cornersValid,
+          cardId: result.cardId,
+          cardName: result.cardName,
+          collectorNumber: result.collectorNumber,
+          setName: result.setName,
+          score: result.score,
+          confidence: result.confidence,
+          orientation: result.orientation,
+          rotationChecked: result.rotationChecked,
+          uprightScore: result.uprightScore,
+          timing: result.timing,
+        });
+        if (!result.cardPresent) {
+          setScannerStatus('Point one card at the camera and fill most of the frame.');
+        } else if (!result.cornersValid) {
+          setScannerStatus('Card found. Move it fully into view so all four corners are visible.');
+        } else if (!Number.isFinite(result.score) || result.score < 0.65) {
+          setScannerStatus('Card found, but the match is uncertain. Tilt it to move glare and hold steady.');
+        } else {
+          setScannerStatus(`Checking ${result.cardName || 'the closest visual match'} across another frame...`);
+        }
+      },
+      onCardDetected(card) {
+        processVisualScannerResult(card.raw, sessionId);
+      },
+      onError({ error, message }) {
+        window.__pokebinderScannerTest?.onVisualError?.(message || error?.message || String(error));
+        if (sessionId === scannerSessionId) showScannerError(scannerErrorMessage(error || new Error(message)));
+      },
+    });
+    if (sessionId !== scannerSessionId || pickerMode !== 'scanner') {
+      return;
+    }
+    setScannerStatus('Requesting camera access...');
+    await scanner.start();
+    scannerStream = scanner.stream;
+    if (sessionId !== scannerSessionId || pickerMode !== 'scanner') {
+      stopScannerStream();
+    } else {
+      setScannerStatus('Point one card at the camera. Hold it steady while several frames are checked.');
+    }
+  } catch (error) {
+    if (sessionId !== scannerSessionId) return;
+    showScannerError(scannerErrorMessage(error));
+  }
+}
+
+function snapshotPickerForScanner() {
+  return {
+    mode: pickerMode,
+    currentName: pickerCurrentName,
+    cards: pickerCards.slice(),
+    selectedCard: pickerSelectedCard,
+    ownedIntent: pickerOwnedIntent,
+    filterValue: cardPickerFilter.value,
+    filterPlaceholder: cardPickerFilter.placeholder,
+    title: cardPickerName.textContent,
+  };
+}
+
+function showScannerMode() {
+  pickerMode = 'scanner';
+  cardPickerName.textContent = 'Scan a card';
+  cardPickerSearchBar.hidden = true;
+  cardPickerGrid.hidden = true;
+  pickerIntentEl.hidden = true;
+  cardPickerFooter.hidden = true;
+  cardScannerEl.hidden = false;
+  cardScannerRetry.hidden = true;
+  cardScannerCapture.disabled = true;
+  cardScannerFile.disabled = false;
+  cardScannerFile.value = '';
+  updatePickerBackVisibility();
+}
+
+function beginCardScanner() {
+  if (state.type !== 'freestyle') return;
+  stopScannerStream();
+  scannerReturnState = snapshotPickerForScanner();
+  const sessionId = ++scannerSessionId;
+  showScannerMode();
+  setScannerStatus('Starting camera...');
+  startScannerCamera(sessionId);
+}
+
+function restoreScannerReturnState() {
+  const previous = scannerReturnState;
+  scannerReturnState = null;
+  ++scannerSessionId;
+  stopScannerStream();
+  cardScannerEl.hidden = true;
+  cardPickerSearchBar.hidden = false;
+  cardPickerGrid.hidden = false;
+  cardPickerFooter.hidden = false;
+  if (!previous) {
+    pickerMode = 'pokemon-search';
+    pickerCurrentName = null;
+    pickerCards = [];
+    pickerSelectedCard = null;
+    pickerOwnedIntent = false;
+    cardPickerFilter.value = '';
+    cardPickerFilter.placeholder = 'Type a Pokemon name...';
+    cardPickerName.textContent = 'Search for a Pokemon';
+    cardPickerGrid.innerHTML = '<div class="card-picker-loading" style="color:var(--text-muted)">Type a Pokemon name above to search for cards</div>';
+    cardPickerCount.textContent = '';
+  } else {
+    pickerMode = previous.mode;
+    pickerCurrentName = previous.currentName;
+    pickerCards = previous.cards;
+    pickerSelectedCard = previous.selectedCard;
+    pickerOwnedIntent = previous.ownedIntent;
+    cardPickerFilter.value = previous.filterValue;
+    cardPickerFilter.placeholder = previous.filterPlaceholder;
+    cardPickerName.textContent = previous.title;
+    if (pickerMode === 'pokemon-search') {
+      if (cardPickerFilter.value.trim()) runPickerSearch();
+      else {
+        cardPickerGrid.innerHTML = '<div class="card-picker-loading" style="color:var(--text-muted)">Type a Pokemon name above to search for cards</div>';
+        cardPickerCount.textContent = '';
+      }
+    } else {
+      runPickerSearch();
+    }
+  }
+  updatePickerFooter();
+  cardPickerCamera.focus();
+}
+
+function scannerProgressMessage(message) {
+  const status = message?.status || 'Reading card...';
+  const progress = Number(message?.progress);
+  if (!Number.isFinite(progress) || progress <= 0) return status;
+  return `${status} ${Math.round(progress * 100)}%`;
+}
+
+async function showScannerMatches(hints, sessionId, { source = 'ocr' } = {}) {
+  if (sessionId !== scannerSessionId || cardPickerModal.hidden) return false;
+  if (typeof window.__pokebinderScannerTest?.onRecognition === 'function') {
+    window.__pokebinderScannerTest.onRecognition({
+      source,
+      names: hints.names.slice(),
+      collectorNumbers: hints.collectorNumbers.slice(),
+      setTokens: hints.setTokens.slice(),
+      visualScore: hints.visualScore || 0,
+      visualProductId: hints.visualProductId || '',
+    });
+  }
+  if (hints.names.length === 0 && hints.collectorNumbers.length === 0) return false;
+
+  setScannerStatus('Looking up matching cards...');
+  const result = await searchCardsByScanHints({
+    ...hints,
+    combineNameAndNumber: source === 'visual',
+  });
+  if (sessionId !== scannerSessionId || cardPickerModal.hidden) return false;
+  if (result.error) throw new Error(`Card lookup failed: ${result.error}`);
+
+  const ranked = rankCardCandidates(hints, result.cards);
+  if (ranked.length === 0) return false;
+
+  const top = ranked[0];
+  const clearlyLeading = source === 'visual' || hasClearScanLeader(ranked);
+  setScannerStatus(source === 'visual' ? 'Visual match found.' : 'Text match found.');
+  pickerMode = 'scan-results';
+  pickerCurrentName = null;
+  pickerCards = ranked.map(item => item.card);
+  pickerSelectedCard = clearlyLeading ? top.card : null;
+  pickerOwnedIntent = true;
+  scannerReturnState = null;
+  cardScannerEl.hidden = true;
+  cardPickerSearchBar.hidden = false;
+  cardPickerGrid.hidden = false;
+  cardPickerFooter.hidden = false;
+  cardPickerName.textContent = 'Scan matches';
+  cardPickerFilter.value = '';
+  cardPickerFilter.placeholder = 'Filter scan matches...';
+  renderPickerCards(pickerCards);
+  cardPickerCount.textContent = clearlyLeading
+    ? `${pickerCards.length} matches · best match selected`
+    : `${pickerCards.length} matches · choose the correct printing`;
+  updatePickerFooter();
+  requestAnimationFrame(() => {
+    const target = cardPickerGrid.querySelector('.card-picker-item.selected')
+      || cardPickerGrid.querySelector('.card-picker-item');
+    target?.focus();
+  });
+  return true;
+}
+
+async function processScannerImage(blob) {
+  const sessionId = scannerSessionId;
+  stopScannerStream();
+  cardScannerCapture.disabled = true;
+  cardScannerRetry.hidden = true;
+  cardScannerFile.disabled = true;
+  setScannerStatus('Loading card reader...');
+
+  try {
+    try {
+      const scanner = await getVisualScanner();
+      if (sessionId !== scannerSessionId || cardPickerModal.hidden) return;
+      setScannerStatus('Matching the card artwork...');
+      const visualResult = await scanner.scanImage(blob);
+      if (sessionId !== scannerSessionId || cardPickerModal.hidden) return;
+      if (visualResult.cardPresent && visualResult.cornersValid && visualResult.score >= 0.65) {
+        const matched = await showScannerMatches(
+          visualResultToScanHints(visualResult),
+          sessionId,
+          { source: 'visual' },
+        );
+        if (matched) return;
+      }
+      setScannerStatus('Visual match uncertain. Reading the printed details as a fallback...');
+    } catch {
+      if (sessionId !== scannerSessionId || cardPickerModal.hidden) return;
+      setScannerStatus('Visual reader unavailable. Reading the printed details as a fallback...');
+    }
+
+    const pokemonNames = [...new Set(getAllPokemon()
+      .filter(pokemon => pokemon.isDefault)
+      .map(pokemon => pokemon.name))];
+    const recognition = await recognizeCardImage(blob, {
+      pokemonNames,
+      onProgress(message) {
+        if (sessionId === scannerSessionId) setScannerStatus(scannerProgressMessage(message));
+      },
+    });
+    if (sessionId !== scannerSessionId || cardPickerModal.hidden) return;
+    const { hints } = recognition;
+    if (hints.names.length === 0 && hints.collectorNumbers.length === 0) {
+      showScannerError('No readable card name or number was found. Improve the lighting, fill the guide, and retry.');
+      return;
+    }
+    const matched = await showScannerMatches(hints, sessionId);
+    if (!matched && sessionId === scannerSessionId) {
+      showScannerError('No matching cards were found. Improve the lighting and retry, or search manually.');
+    }
+  } catch (error) {
+    console.error('Card scanner failed:', error);
+    if (sessionId === scannerSessionId) {
+      showScannerError('The card reader could not load or process this image. Retry or search manually.');
+    }
+  } finally {
+    cardScannerCanvas.width = 0;
+    cardScannerCanvas.height = 0;
+    cardScannerFile.disabled = false;
+  }
+}
 
 async function openCardPicker(formId, pokemonName) {
+  ++scannerSessionId;
+  stopScannerStream();
+  scannerReturnState = null;
   pickerPreviousFocus = document.activeElement;
   pickerFormId = formId;
   pickerCurrentName = pokemonName;
@@ -1509,6 +1915,10 @@ async function openCardPicker(formId, pokemonName) {
 
   cardPickerFilter.value = '';
   cardPickerModal.hidden = false;
+  cardScannerEl.hidden = true;
+  cardPickerSearchBar.hidden = false;
+  cardPickerGrid.hidden = false;
+  cardPickerFooter.hidden = false;
 
   if (state.type === 'freestyle' && !pokemonName) {
     // Freestyle: show Pokemon search first
@@ -1628,13 +2038,20 @@ function updatePickerIntent() {
 }
 
 function updatePickerBackVisibility() {
-  cardPickerBack.hidden = !(state.type === 'freestyle' && pickerMode === 'cards');
+  const isScannerMode = pickerMode === 'scanner';
+  const isResultMode = pickerMode === 'cards' || pickerMode === 'scan-results';
+  cardPickerBack.hidden = !(state.type === 'freestyle' && isResultMode);
+  cardPickerCamera.hidden = state.type !== 'freestyle' || isScannerMode;
+  cardPickerRefresh.hidden = pickerMode !== 'cards' || !pickerCurrentName;
   const isSearchMode = pickerMode === 'pokemon-search';
-  cardPickerSave.hidden = isSearchMode;
-  cardPickerClear.hidden = isSearchMode;
+  cardPickerSave.hidden = isSearchMode || isScannerMode;
+  cardPickerClear.hidden = isSearchMode || isScannerMode;
 }
 
 function closeCardPicker() {
+  ++scannerSessionId;
+  stopScannerStream();
+  scannerReturnState = null;
   cardPickerModal.hidden = true;
   pickerFormId = null;
   pickerCurrentName = null;
@@ -1642,6 +2059,10 @@ function closeCardPicker() {
   pickerSelectedCard = null;
   pickerOwnedIntent = false;
   pickerMode = 'cards';
+  cardScannerEl.hidden = true;
+  cardPickerSearchBar.hidden = false;
+  cardPickerGrid.hidden = false;
+  cardPickerFooter.hidden = false;
   pickerIntentEl.hidden = true;
   cardPickerBack.hidden = true;
   cardPickerFilter.placeholder = 'Filter by set, number, rarity...';
@@ -1703,8 +2124,43 @@ function restorePickerFocus() {
 
 cardPickerClose.addEventListener('click', () => { closeCardPicker(); restorePickerFocus(); });
 cardPickerModal.querySelector('.modal-backdrop').addEventListener('click', () => { closeCardPicker(); restorePickerFocus(); });
+cardPickerCamera.addEventListener('click', beginCardScanner);
+cardScannerCancel.addEventListener('click', restoreScannerReturnState);
+cardScannerRetry.addEventListener('click', () => {
+  const sessionId = ++scannerSessionId;
+  stopScannerStream();
+  showScannerMode();
+  setScannerStatus('Starting camera...');
+  startScannerCamera(sessionId);
+});
+cardScannerFile.addEventListener('change', async () => {
+  const sessionId = scannerSessionId;
+  const file = cardScannerFile.files?.[0];
+  if (!file) return;
+  if (sessionId !== scannerSessionId || pickerMode !== 'scanner') return;
+  await processScannerImage(file);
+  cardScannerFile.value = '';
+});
+
+window.addEventListener('pagehide', () => {
+  ++scannerSessionId;
+  stopScannerStream();
+  if (pickerMode === 'scanner') {
+    setScannerStatus('The camera stopped when the page was left. Retry to resume scanning.', { error: true });
+    cardScannerCapture.disabled = true;
+    cardScannerRetry.hidden = false;
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden || pickerMode !== 'scanner' || !scannerStream) return;
+  ++scannerSessionId;
+  showScannerError('The camera stopped while the page was hidden. Retry to resume scanning.');
+});
 
 cardPickerBack.addEventListener('click', () => {
+  ++scannerSessionId;
+  stopScannerStream();
+  scannerReturnState = null;
   pickerMode = 'pokemon-search';
   pickerSelectedCard = null;
   pickerCurrentName = null;
@@ -1723,10 +2179,14 @@ document.addEventListener('keydown', (e) => {
   if (cardPickerModal.hidden) return;
   if (e.key === 'Escape') {
     e.preventDefault();
+    if (pickerMode === 'scanner') {
+      restoreScannerReturnState();
+      return;
+    }
     closeCardPicker();
     restorePickerFocus();
   } else if (e.key === 'Enter') {
-    if (pickerMode === 'pokemon-search') return;
+    if (pickerMode === 'pokemon-search' || pickerMode === 'scanner') return;
     const focused = document.activeElement;
     if (focused && focused.classList.contains('card-picker-item')) return;
     if (focused === cardPickerFilter) return;
@@ -1735,7 +2195,7 @@ document.addEventListener('keydown', (e) => {
     // nowhere meaningful.
     if (focused === cardPickerSave || focused === cardPickerClear
         || focused === cardPickerBack || focused === cardPickerClose
-        || focused === cardPickerRefresh) return;
+        || focused === cardPickerRefresh || focused === cardPickerCamera) return;
     if (focused && focused.tagName === 'INPUT' && focused.type === 'radio') return;
     e.preventDefault();
     cardPickerSave.click();
@@ -1744,7 +2204,7 @@ document.addEventListener('keydown', (e) => {
 
 cardPickerSave.addEventListener('click', () => {
   // Pokemon-search mode has no selection to save — ignore any stray invocations.
-  if (pickerMode === 'pokemon-search') return;
+  if (pickerMode === 'pokemon-search' || pickerMode === 'scanner') return;
   if (!pickerFormId) { closeCardPicker(); return; }
 
   if (state.type === 'freestyle') {
