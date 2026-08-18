@@ -9,6 +9,12 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <aside id="file-launch-warning" class="file-launch-warning" role="alert" hidden>
+    <strong>Pokebinder needs a local web server.</strong>
+    Opening <code>index.html</code> directly prevents the app modules and card scanner from loading.
+    Run <code>python3 -m http.server 8080</code> in this folder, then open
+    <a href="http://localhost:8080">http://localhost:8080</a>.
+  </aside>
   <div class="device-top">
     <div class="led-big"></div>
     <div class="led-small led-red"></div>
@@ -142,8 +148,25 @@
       <div class="card-search-bar">
         <input type="text" id="card-picker-filter" class="search-input" placeholder="Filter by set, number, rarity..." autocomplete="off">
         <span id="card-picker-count" class="card-picker-count"></span>
+        <button id="card-picker-camera" class="btn btn-small card-picker-camera" title="Scan a card" aria-label="Scan a card" hidden>&#128247;</button>
         <button id="card-picker-refresh" class="btn btn-small" title="Refresh cards from API">&#8635;</button>
       </div>
+      <section id="card-scanner" class="card-scanner" hidden aria-label="Card scanner">
+        <div class="card-scanner-preview">
+          <div id="card-scanner-visual"></div>
+        </div>
+        <canvas id="card-scanner-canvas" hidden></canvas>
+        <p id="card-scanner-status" class="card-scanner-status" role="status" aria-live="polite">Starting camera...</p>
+        <div class="card-scanner-actions">
+          <button id="card-scanner-capture" class="btn btn-primary" hidden disabled>Scanning automatically</button>
+          <label class="btn card-scanner-file-label">
+            Choose photo
+            <input id="card-scanner-file" type="file" accept="image/*" capture="environment" hidden>
+          </label>
+          <button id="card-scanner-retry" class="btn" hidden>Retry</button>
+          <button id="card-scanner-cancel" class="btn">Back to picker</button>
+        </div>
+      </section>
       <div id="card-picker-grid" class="card-picker-grid"></div>
       <div id="picker-intent" class="picker-intent" hidden>
         <label class="picker-intent-option">
@@ -281,6 +304,11 @@
     <button id="undo-toast-action" class="btn btn-small">Undo</button>
   </div>
 
-  <script type="module" src="js/app.js?v=2026-04-20-g"></script>
+  <script>
+    if (window.location.protocol === 'file:') {
+      document.getElementById('file-launch-warning').hidden = false;
+    }
+  </script>
+  <script type="module" src="js/app.js?v=2026-08-17-c"></script>
 </body>
 </html>

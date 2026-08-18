@@ -69,6 +69,70 @@ async function fetchCardsForPokemon(name, { skipCache = false } = {}) {
   }
 }
 
+function escapeLucenePhrase(value) {
+  return String(value || '').replace(/([+\-&|!(){}\[\]^"~*?:\\/])/g, '\\$1');
+}
+
+function scanNumberVariants(value) {
+  const numerator = String(value || '').split('/')[0].toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!numerator) return [];
+  const withoutZeros = numerator.replace(/^([A-Z]*?)0+(\d)/, '$1$2');
+  const numericSuffix = numerator.match(/(\d+[A-Z]?)$/)?.[1] || '';
+  const compactNumeric = numericSuffix.replace(/^0+(?=\d)/, '');
+  return [...new Set([numerator, withoutZeros, numericSuffix, compactNumeric].filter(Boolean))];
+}
+
+async function fetchScanResponse(url) {
+  let response;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    response = await fetch(url);
+    if (response.ok) return response;
+    const transient = response.status === 429 || response.status >= 500;
+    if (!transient || attempt === 1) break;
+    await new Promise(resolve => setTimeout(resolve, 400));
+  }
+  throw new Error(`API error: ${response?.status || 'network failure'}`);
+}
+
+async function searchCardsByScanHints({ names = [], collectorNumbers = [], combineNameAndNumber = false } = {}) {
+  const numberTerms = collectorNumbers
+    .flatMap(scanNumberVariants)
+    .slice(0, 4)
+    .map(number => `number:"${escapeLucenePhrase(number)}"`);
+
+  const usableNames = names
+    .map(name => String(name || '').replace(/\s+/g, ' ').trim())
+    .filter(name => name.length >= 2 && name.length <= 40)
+    .slice(0, 3);
+
+  let query = '';
+  if (numberTerms.length > 0) {
+    const numberQuery = numberTerms.length === 1 ? numberTerms[0] : `(${numberTerms.join(' OR ')})`;
+    if (combineNameAndNumber && usableNames.length > 0) {
+      const nameTerms = usableNames.map(name => `name:"${escapeLucenePhrase(name)}"`);
+      const nameQuery = nameTerms.length === 1 ? nameTerms[0] : `(${nameTerms.join(' OR ')})`;
+      query = `${numberQuery} AND ${nameQuery}`;
+    } else {
+      query = numberQuery;
+    }
+  } else if (usableNames.length > 0) {
+    const nameTerms = usableNames.map(name => `name:"${escapeLucenePhrase(name)}"`);
+    query = nameTerms.length === 1 ? nameTerms[0] : `(${nameTerms.join(' OR ')})`;
+  }
+
+  if (!query) return { cards: [] };
+
+  try {
+    const q = encodeURIComponent(query);
+    const url = `https://api.pokemontcg.io/v2/cards?q=${q}&orderBy=-set.releaseDate&pageSize=250`;
+    const res = await fetchScanResponse(url);
+    const json = await res.json();
+    return { cards: (json.data || []).map(parseCard) };
+  } catch (err) {
+    return { cards: [], error: err.message };
+  }
+}
+
 async function fetchSets(query) {
   try {
     const q = encodeURIComponent(`name:"*${query}*"`);
@@ -245,4 +309,4 @@ async function hydrateCards(cardIds, { localCards, networkIds } = {}) {
   return result;
 }
 
-export { fetchCardsForPokemon, fetchSets, fetchSetCards, expandVariants, getVariantLabel, hydrateCards, ensureOverridesLoaded, VARIANT_LABELS };
+export { fetchCardsForPokemon, searchCardsByScanHints, fetchSets, fetchSetCards, expandVariants, getVariantLabel, hydrateCards, ensureOverridesLoaded, VARIANT_LABELS };

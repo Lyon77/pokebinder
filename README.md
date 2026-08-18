@@ -21,7 +21,7 @@ Each collection has its own layout (3x3, 3x4, 4x3, 4x4), its own caught/want sta
 - **Dual numbering** — every entry shows both its National Pokedex number (or card number, for master sets) and its sequential collection position.
 - **Form management** (Pokedex) — toggle entire form categories (Regional, Mega, Gigantamax, Other) or individual forms to customize which alternates are included.
 - **Search & filter** — real-time search by name, form, or number. Multi-select generation filters (Gen I–IX) plus autocomplete.
-- **TCG card picker** — click any slot to attach a specific TCG card. Search any Pokemon, browse cards from any set, filter by set name, card number, or rarity. The picker caches fetched cards in IndexedDB so re-opening is instant.
+- **TCG card picker** — click any slot to attach a specific TCG card. Search any Pokemon, browse cards from any set, filter by set name, card number, or rarity. Freestyle binders can also scan a physical card with the device camera and confirm a ranked match. The picker caches fetched cards in IndexedDB so re-opening is instant.
 - **Completion stats** — overall and per-generation progress that updates in real-time as you toggle caught state.
 - **Cloud sync** (optional) — one-way setup: create a private GitHub Gist, generate a personal access token with the `gist` scope, and paste both into the sync dialog. All collections sync as a single compact bundle. Edits on one device appear on others within 30 s. Creating or deleting collections propagates too.
 - **Export / import** — back up and restore all collections as a JSON file. Works offline; no account required.
@@ -29,7 +29,8 @@ Each collection has its own layout (3x3, 3x4, 4x3, 4x4), its own caught/want sta
 
 ## Running Locally
 
-Serve the repo root with any static file server:
+Serve the repo root with any static file server. Do not open `index.html` directly with a
+`file://` URL: browsers block the JavaScript modules and scanner worker in that mode.
 
 ```bash
 # Python
@@ -40,6 +41,16 @@ npx serve .
 ```
 
 Then open [http://localhost:8080](http://localhost:8080).
+
+## Camera Card Scanning
+
+In a Freestyle binder, open an empty slot or choose **Change card**, then use the camera button in the card picker. Point the camera at one English-language Pokemon TCG card and hold it steady. The scanner detects and straightens the card, matches its artwork against the Pokemon catalog across multiple frames, and asks you to confirm the printing before saving. Presenting a physical card defaults the selection to **Owned**, but it can still be changed to **Placeholder**.
+
+Live camera access requires HTTPS or `localhost`. If camera access is unavailable or denied, **Choose photo** uses an existing image or the device's native camera picker. Leave a little background visible around all four card corners and slowly tilt a sleeved or holo card so glare moves between frames. Manual search remains available when a scan is uncertain.
+
+Camera frames and uploaded photos are processed locally and are not stored in IndexedDB, exports, or sync data. Visual recognition uses CollectorVision's corner detector, Milo embeddings, and Pokemon catalog; OCR is retained only as a fallback for uncertain uploaded photos. Only the recognized name/number hints are sent to the same Pokemon TCG API already used by manual card search. The first scan needs network access and downloads roughly 15–25 MB of model, runtime, and catalog data, which is then cached in IndexedDB.
+
+The vendored CollectorVision browser components are AGPL-3.0 licensed. See [`vendor/collectorvision/LICENSE`](vendor/collectorvision/LICENSE) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Review those terms before redistributing a modified hosted version.
 
 ## Cross-Device Sync Setup
 
@@ -92,10 +103,15 @@ js/
                         rate-limit handling
   tcg-api.js            Pokemon TCG API client — card fetch, set search,
                         variant expansion, batched card hydration
+  card-scanner.js       Visual/OCR hint conversion and scan-result ranking
+vendor/collectorvision/
+                        Local visual-recognition worker and catalog client
 data/
   pokemon.json          1288 Pokemon entries (generated)
 scripts/
   generate-data.js      PokeAPI data generation script
+  verify-card-scanner.mjs
+                        Chrome DevTools smoke test using a synthetic camera feed
 openspec/
   specs/                Current capability specs (spec-driven workflow)
   changes/archive/      Archived change proposals

@@ -20,6 +20,25 @@
   --accent-glow-rgb: 0, 255, 68;
 }
 
+.file-launch-warning {
+  position: relative;
+  z-index: 1000;
+  padding: 0.8rem 1rem;
+  border-bottom: 2px solid #ffbf47;
+  background: #3b2b09;
+  color: #fff4cf;
+  font: 0.82rem/1.5 'Roboto Mono', monospace;
+  text-align: center;
+}
+
+.file-launch-warning code {
+  color: #fff;
+}
+
+.file-launch-warning a {
+  color: #8edbff;
+}
+
 /* Per-collection-type accent. The default tokens in :root cover pokedex; these
    overrides retint the active accent so master / freestyle binders feel like
    distinct "modes" while the rest of the chrome stays consistent. */
@@ -564,7 +583,84 @@ main {
   padding: 0.5rem 1rem;
   border-bottom: 1px solid var(--border);
 }
+.card-search-bar[hidden] { display: none; }
 .card-picker-count { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+.card-picker-camera {
+  min-width: 2.2rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+.card-scanner {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  background: var(--bg);
+}
+.card-scanner[hidden] { display: none; }
+.card-scanner-preview {
+  position: relative;
+  width: min(100%, 560px);
+  min-height: 240px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #050505;
+}
+.card-scanner-preview video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+#card-scanner-visual,
+#card-scanner-visual .cv-applet,
+#card-scanner-visual .cv-applet__stage {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+#card-scanner-visual .cv-applet { display: block; }
+#card-scanner-visual .cv-applet__stage {
+  border-radius: 0;
+  aspect-ratio: auto;
+  box-shadow: none;
+}
+#card-scanner-visual .cv-applet__status { display: none; }
+.card-scanner-guide {
+  position: absolute;
+  inset: 7% auto;
+  left: 50%;
+  aspect-ratio: 2.5 / 3.5;
+  height: 86%;
+  max-width: 75%;
+  transform: translateX(-50%);
+  border: 3px solid var(--caught-border);
+  border-radius: 4% / 3%;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.4), 0 0 16px rgba(79, 255, 143, 0.35);
+  pointer-events: none;
+}
+.card-scanner-status {
+  min-height: 1.25rem;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.card-scanner-status.error { color: var(--accent); }
+.card-scanner-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.card-scanner-file-label { cursor: pointer; }
 .card-picker-grid {
   flex: 1 1 0;
   min-height: 0;
@@ -575,6 +671,7 @@ main {
   gap: 0.75rem;
   align-content: start;
 }
+.card-picker-grid[hidden] { display: none; }
 .card-picker-item {
   border: 2px solid var(--border);
   border-radius: var(--radius);
@@ -612,6 +709,7 @@ main {
   padding: 0.5rem 1rem;
   border-top: 1px solid var(--border);
 }
+.card-picker-footer[hidden] { display: none; }
 .card-picker-header { padding: 0.75rem 1rem; margin-bottom: 0; position: relative; }
 .card-picker-header h2 { flex: 1; text-align: center; }
 .card-picker-back {
@@ -655,6 +753,11 @@ main {
 @media (max-width: 600px) {
   .picker-intent { flex-direction: column; gap: 0.4rem; padding: 0.4rem 0.5rem; }
   .picker-intent-desc { margin-left: 0.5rem; }
+  .card-scanner { padding: 0.5rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom, 0px)); }
+  .card-scanner-preview { width: 100%; min-height: 220px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-scanner-guide { box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.4); }
 }
 .card-picker-selected-info { font-size: 0.8rem; color: var(--text-muted); }
 .card-picker-actions { display: flex; gap: 0.5rem; }
@@ -1366,4 +1469,3 @@ main {
     box-shadow: none;
   }
 }
-
