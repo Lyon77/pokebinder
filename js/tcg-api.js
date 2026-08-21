@@ -36,14 +36,29 @@ function parseCard(raw) {
   };
 }
 
+function normalizeTcgName(name) {
+  return String(name || '').replace(/[’‘`]/g, "'").replace(/\s+/g, ' ').trim();
+}
+
+// The API currently returns a server error for exact Farfetch'd/Sirfetch'd
+// phrase queries. Their prefixes are unique Pokemon names and return the same
+// intended card sets without sending an apostrophe through the Lucene parser.
+function apostrophePokemonPrefixQuery(name) {
+  const match = normalizeTcgName(name).match(/^(Farfetch|Sirfetch)'d$/i);
+  return match ? `name:${match[1]}*` : null;
+}
+
 // pokemontcg.io stores Nidoran cards inconsistently — most are "Nidoran ♀" (with
 // a space) but a few (e.g. Team Rocket's) are "Nidoran♀". Lucene phrase matching
 // distinguishes these, so query both forms when the name contains ♀ or ♂.
 function buildNameQuery(name) {
-  if (!/[♀♂]/.test(name)) return `name:"${name}"`;
-  const spaced = name.replace(/\s*([♀♂])/, ' $1');
-  const unspaced = name.replace(/\s*([♀♂])/, '$1');
-  if (spaced === unspaced) return `name:"${name}"`;
+  const normalized = normalizeTcgName(name);
+  const prefixQuery = apostrophePokemonPrefixQuery(normalized);
+  if (prefixQuery) return prefixQuery;
+  if (!/[♀♂]/.test(normalized)) return `name:"${normalized}"`;
+  const spaced = normalized.replace(/\s*([♀♂])/, ' $1');
+  const unspaced = normalized.replace(/\s*([♀♂])/, '$1');
+  if (spaced === unspaced) return `name:"${normalized}"`;
   return `name:"${unspaced}" OR name:"${spaced}"`;
 }
 
@@ -51,18 +66,22 @@ async function fetchCardsForPokemon(name, { skipCache = false } = {}) {
   if (!skipCache) {
     try {
       const cached = await getCachedCards(name);
-      if (cached) return { cards: cached };
+      if (Array.isArray(cached) && cached.length > 0) return { cards: cached };
     } catch { /* ignore cache errors */ }
   }
 
   try {
-    const q = encodeURIComponent(buildNameQuery(name));
-    const url = `https://api.pokemontcg.io/v2/cards?q=${q}&orderBy=set.releaseDate&pageSize=250`;
+    const nameQuery = buildNameQuery(name);
+    const pageSize = apostrophePokemonPrefixQuery(name) ? 100 : 250;
+    const q = encodeURIComponent(nameQuery);
+    const url = `https://api.pokemontcg.io/v2/cards?q=${q}&orderBy=set.releaseDate&pageSize=${pageSize}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     const json = await res.json();
     const cards = (json.data || []).map(parseCard);
-    try { await cacheCards(name, cards); } catch { /* ignore cache errors */ }
+    if (cards.length > 0) {
+      try { await cacheCards(name, cards); } catch { /* ignore cache errors */ }
+    }
     return { cards };
   } catch (err) {
     return { cards: [], error: err.message };
@@ -109,14 +128,20 @@ async function searchCardsByScanHints({ names = [], collectorNumbers = [], combi
   if (numberTerms.length > 0) {
     const numberQuery = numberTerms.length === 1 ? numberTerms[0] : `(${numberTerms.join(' OR ')})`;
     if (combineNameAndNumber && usableNames.length > 0) {
-      const nameTerms = usableNames.map(name => `name:"${escapeLucenePhrase(name)}"`);
+      const nameTerms = usableNames.map(name => (
+        apostrophePokemonPrefixQuery(name)
+        || `name:"${escapeLucenePhrase(normalizeTcgName(name))}"`
+      ));
       const nameQuery = nameTerms.length === 1 ? nameTerms[0] : `(${nameTerms.join(' OR ')})`;
       query = `${numberQuery} AND ${nameQuery}`;
     } else {
       query = numberQuery;
     }
   } else if (usableNames.length > 0) {
-    const nameTerms = usableNames.map(name => `name:"${escapeLucenePhrase(name)}"`);
+    const nameTerms = usableNames.map(name => (
+      apostrophePokemonPrefixQuery(name)
+      || `name:"${escapeLucenePhrase(normalizeTcgName(name))}"`
+    ));
     query = nameTerms.length === 1 ? nameTerms[0] : `(${nameTerms.join(' OR ')})`;
   }
 
@@ -124,7 +149,8 @@ async function searchCardsByScanHints({ names = [], collectorNumbers = [], combi
 
   try {
     const q = encodeURIComponent(query);
-    const url = `https://api.pokemontcg.io/v2/cards?q=${q}&orderBy=-set.releaseDate&pageSize=250`;
+    const pageSize = usableNames.some(name => apostrophePokemonPrefixQuery(name)) ? 100 : 250;
+    const url = `https://api.pokemontcg.io/v2/cards?q=${q}&orderBy=-set.releaseDate&pageSize=${pageSize}`;
     const res = await fetchScanResponse(url);
     const json = await res.json();
     return { cards: (json.data || []).map(parseCard) };
