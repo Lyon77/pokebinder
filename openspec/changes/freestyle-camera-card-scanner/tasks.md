@@ -64,3 +64,9 @@
 - [x] 9.2 Skip the 180-degree embedding when the upright result is already at or above the guarded 0.75 fast-path threshold, while retaining rotated fallback below it.
 - [x] 9.3 Reduce the two-frame confirmation interval from 650 ms to 300 ms without weakening the consecutive-match requirement.
 - [x] 9.4 Run unit tests plus clean, glare, and upside-down browser recognition checks after the optimization changes.
+
+## 10. Apostrophe-name lookup regression
+
+- [x] 10.1 Normalize typographic apostrophes and use API-safe prefix clauses for Farfetch'd and Sirfetch'd in manual and scanner lookups.
+- [x] 10.2 Ignore and stop persisting empty Pokemon-name cache entries so previously failed lookups recover immediately.
+- [x] 10.3 Add Farfetch'd query regression coverage and run the full automated test suite.

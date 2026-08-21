@@ -10,7 +10,7 @@ import {
   resolveCreateWorker,
   visualResultToScanHints,
 } from '../js/card-scanner.js';
-import { searchCardsByScanHints } from '../js/tcg-api.js';
+import { fetchCardsForPokemon, searchCardsByScanHints } from '../js/tcg-api.js';
 import {
   DEFAULT_ROTATION_FAST_PATH_THRESHOLD,
   shouldCheckRotatedMatch,
@@ -221,6 +221,30 @@ test('visual lookup combines collector number and name', async (t) => {
   assert.match(query, /number:"009"/);
   assert.match(query, /name:"Lugia"/);
   assert.match(query, / AND /);
+});
+
+test('Farfetch’d manual and scanner lookups avoid apostrophes in API queries', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const queries = [];
+  const pageSizes = [];
+  globalThis.fetch = async (url) => {
+    const requested = new URL(String(url));
+    queries.push(decodeURIComponent(requested.searchParams.get('q')));
+    pageSizes.push(requested.searchParams.get('pageSize'));
+    return { ok: true, async json() { return { data: [] }; } };
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  await fetchCardsForPokemon('Farfetch’d', { skipCache: true });
+  await searchCardsByScanHints({ names: ['Farfetch\'d'] });
+  await searchCardsByScanHints({ names: ['Sirfetch’d'] });
+
+  assert.deepEqual(queries, [
+    'name:Farfetch*',
+    'name:Farfetch*',
+    'name:Sirfetch*',
+  ]);
+  assert.deepEqual(pageSizes, ['100', '100', '100']);
 });
 
 test('scan lookup retries one transient API failure', async (t) => {
