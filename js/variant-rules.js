@@ -127,6 +127,9 @@ function variantsForCard(card) {
   const setId = set.id || '';
   const rarity = card.rarity || '';
 
+  // Every card in the 30th anniversary sets has a single holo finish.
+  if (setId === 'me55' || setId === 'me55c') return ['holofoil'];
+
   if (!rarity && !releaseDate && !setId) return ['default'];
 
   const era = getEra(releaseDate, setId);

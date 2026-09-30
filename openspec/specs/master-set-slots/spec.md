@@ -18,6 +18,11 @@ When a set is added to a Master Set collection, the system SHALL fetch all cards
 - **WHEN** a card has rarity `"Common"` in a set released after 2003-06-01
 - **THEN** two slots are created: `{cardId}:normal` and `{cardId}:reverseHolofoil`
 
+#### Scenario: 30th anniversary sets
+- **WHEN** a card belongs to 30th Celebration (`me55`) or 30th Celebration Classic Collection (`me55c`)
+- **THEN** one slot is created: `{cardId}:holofoil`, regardless of rarity
+- **AND** per-card variant overrides still take precedence
+
 #### Scenario: Aquapolis Rare Holo
 - **WHEN** a card has rarity `"Rare Holo"` and set ID `ecard2`
 - **THEN** one slot is created: `{cardId}:holofoil`
@@ -60,6 +65,11 @@ When a set is added to a Master Set collection, the system SHALL fetch all cards
 - **WHEN** a set has more than 250 cards
 - **THEN** the system fetches additional pages until all cards are retrieved
 
+#### Scenario: Set cards are unavailable or incomplete
+- **WHEN** the card API returns an error, an empty response, or fewer cards than its reported total
+- **THEN** the set fetch fails without returning a partial card list
+- **AND** adding that set remains retryable without saving empty or partial slots
+
 ### Requirement: Manual slot refresh
 Each Master Set collection SHALL expose a "Refresh slots" action in the collection dropdown that re-fetches every set in the collection, recomputes its slot list using the current variant rules, and replaces the stored slot list. Refresh SHALL NOT happen automatically.
 
@@ -70,6 +80,11 @@ Each Master Set collection SHALL expose a "Refresh slots" action in the collecti
 #### Scenario: Refresh when nothing changes
 - **WHEN** the recomputed slot list matches the stored one
 - **THEN** the user is notified that the collection is already up to date and no write occurs
+
+#### Scenario: Refresh fetch failure
+- **WHEN** any set cannot be fetched completely
+- **THEN** the user sees an error and can retry Refresh slots later
+- **AND** the stored slot list and owned state remain unchanged
 
 ### Requirement: Slot list caching
 The expanded slot list for a Master Set collection SHALL be stored in the collection's `slotList` field in IndexedDB. The slot list SHALL NOT be re-fetched from the API on subsequent loads.
