@@ -463,8 +463,8 @@ async function refreshMasterSlots(id, isActive) {
   const allSlots = [];
   for (const setId of sets) {
     const cardResult = await fetchSetCards(setId);
-    if (cardResult.error && cardResult.cards.length === 0) {
-      alert(`Failed to fetch ${setId}: ${cardResult.error}`);
+    if (cardResult.error) {
+      alert(`Could not load set ${setId}: ${cardResult.error}. Try Refresh slots again later.`);
       return;
     }
     allSlots.push(...expandVariants(cardResult.cards));
@@ -686,10 +686,10 @@ createSetSearch.addEventListener('input', () => {
         btn.textContent = 'Fetching...';
         btn.disabled = true;
         const meta = el.querySelector('.set-result-meta');
-        const origMeta = meta.textContent;
         meta.textContent = `Fetching ${s.total} cards...`;
         try {
           const cardResult = await fetchSetCards(s.id);
+          if (cardResult.error) throw new Error(cardResult.error);
           meta.textContent = `Expanding variants...`;
           await ensureOverridesLoaded();
           // Yield to UI before heavy computation
@@ -700,7 +700,7 @@ createSetSearch.addEventListener('input', () => {
           createConfirmBtn.disabled = !canCreate();
           el.remove();
         } catch (err) {
-          meta.textContent = origMeta;
+          meta.textContent = `Could not load ${s.name}: ${err.message}. Retry.`;
           btn.textContent = 'Retry';
           btn.disabled = false;
         }
@@ -1242,13 +1242,14 @@ bookSetSearch.addEventListener('input', () => {
       el.querySelector('.btn-add').addEventListener('click', async (e) => {
         const btn = e.target;
         const meta = el.querySelector('.set-result-meta');
-        const origMeta = meta.textContent;
         btn.textContent = 'Fetching...';
         btn.disabled = true;
         meta.textContent = `Fetching ${s.total} cards...`;
         try {
           const cardResult = await fetchSetCards(s.id);
+          if (cardResult.error) throw new Error(cardResult.error);
           meta.textContent = 'Expanding variants...';
+          await ensureOverridesLoaded();
           await new Promise(r => setTimeout(r, 0));
           const slotList = expandVariants(cardResult.cards);
           await addSetToCollection(state, { id: s.id, name: s.name, year: s.year, total: s.total, slotList });
@@ -1256,7 +1257,7 @@ bookSetSearch.addEventListener('input', () => {
           renderBookSettings();
           renderBookSelector();
         } catch (err) {
-          meta.textContent = origMeta;
+          meta.textContent = `Could not load ${s.name}: ${err.message}. Retry.`;
           btn.textContent = 'Retry';
           btn.disabled = false;
         }

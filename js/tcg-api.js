@@ -185,6 +185,7 @@ async function fetchSetCards(setId) {
   const allCards = [];
   let page = 1;
   const pageSize = 250;
+  let expectedTotal = null;
 
   try {
     while (true) {
@@ -193,14 +194,23 @@ async function fetchSetCards(setId) {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const json = await res.json();
-      const cards = json.data || [];
+      const cards = json.data;
+      const total = json.totalCount;
+      if (!Array.isArray(cards) || !Number.isInteger(total) || total <= 0 || cards.length === 0) {
+        throw new Error('API returned no complete card list');
+      }
+      if (expectedTotal === null) expectedTotal = total;
+      if (total !== expectedTotal) throw new Error('API card count changed between pages');
       allCards.push(...cards);
-      if (allCards.length >= (json.totalCount || 0) || cards.length < pageSize) break;
+      if (allCards.length === expectedTotal) break;
+      if (allCards.length > expectedTotal || cards.length < pageSize) {
+        throw new Error(`API returned only ${allCards.length} of ${expectedTotal} cards`);
+      }
       page++;
     }
     return { cards: allCards };
   } catch (err) {
-    return { cards: allCards, error: err.message };
+    return { cards: [], error: err.message };
   }
 }
 

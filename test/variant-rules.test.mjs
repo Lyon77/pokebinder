@@ -42,6 +42,11 @@ const cases = [
     card: makeCard('swsh12pt5-160', 'swsh12pt5', '2023/01/20', 'Rare Secret'),
     expected: ['holofoil'],
   },
+  ...['me55', 'me55c'].flatMap(setId => ['Common', 'Rare', 'Rare Holo', 'Illustration Rare'].map(rarity => ({
+    name: `${setId} ${rarity} cards have only a holofoil variant`,
+    card: makeCard(`${setId}-1`, setId, '2026/01/01', rarity),
+    expected: ['holofoil'],
+  }))),
 ];
 
 for (const { name, card, expected } of cases) {
